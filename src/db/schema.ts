@@ -36,6 +36,8 @@ export const materials = pgTable(
     originalFilename: text("original_filename").notNull(),
     blobUrl: text("blob_url").notNull(),
     blobPathname: text("blob_pathname").notNull(),
+    extractedTextBlobUrl: text("extracted_text_blob_url"),
+    extractedTextBlobPathname: text("extracted_text_blob_pathname"),
     byteSize: integer("byte_size").notNull(),
     characterCount: integer("character_count"),
     pageCount: integer("page_count"),

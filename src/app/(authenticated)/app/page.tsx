@@ -1,9 +1,11 @@
 import { ArrowRight, BookOpenText, FileUp, MoreHorizontal, Plus } from "lucide-react";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { requireUser } from "@/lib/auth/dal";
 
 const courses = [
   {
@@ -20,19 +22,24 @@ const courses = [
   },
 ];
 
-export default function CoursesPage() {
+export const dynamic = "force-dynamic";
+
+export default async function CoursesPage() {
+  const user = await requireUser();
+  const firstName = user.name?.trim().split(/\s+/)[0] || "learner";
+
   return (
     <main className="mx-auto max-w-6xl p-5 sm:p-8 lg:p-10">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
           <p className="text-sm font-medium text-emerald-700">Your learning space</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-stone-950">Good morning, learner.</h1>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-stone-950">Welcome back, {firstName}.</h1>
           <p className="mt-2 text-stone-500">Pick up where you left off or turn new material into a course.</p>
         </div>
-        <Button size="lg">
+        <Link href="/app/materials" className={buttonVariants({ size: "lg" })}>
           <Plus data-icon="inline-start" aria-hidden="true" />
-          New course
-        </Button>
+          Add material
+        </Link>
       </div>
 
       <section className="mt-10" aria-labelledby="continue-heading">
@@ -83,7 +90,7 @@ export default function CoursesPage() {
             <p className="mt-1 max-w-md text-sm leading-6 text-stone-500">
               Upload a PDF or paste your notes. Tutor will create a private, grounded learning path.
             </p>
-            <Button variant="secondary" className="mt-5">Add material</Button>
+            <Link href="/app/materials" className={buttonVariants({ variant: "secondary", className: "mt-5" })}>Add material</Link>
           </CardContent>
         </Card>
       </section>

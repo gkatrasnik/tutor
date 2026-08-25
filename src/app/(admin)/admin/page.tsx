@@ -5,14 +5,19 @@ import { Brand } from "@/components/brand";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireAdmin } from "@/lib/auth/dal";
 
-export default function AdminPage() {
+export const dynamic = "force-dynamic";
+
+export default async function AdminPage() {
+  const admin = await requireAdmin();
+
   return (
     <main className="min-h-screen bg-stone-50">
       <header className="border-b bg-white">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
           <Brand />
-          <Badge variant="outline"><ShieldCheck aria-hidden="true" /> Admin preview</Badge>
+          <Badge variant="outline"><ShieldCheck aria-hidden="true" /> {admin.email}</Badge>
         </div>
       </header>
       <div className="mx-auto max-w-6xl px-5 py-12">
