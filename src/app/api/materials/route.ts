@@ -1,14 +1,21 @@
 import { head, put } from "@vercel/blob";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 
 import { db } from "@/db";
-import { materials } from "@/db/schema";
+import { courses, materials } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
+import { materialUploadPrefix } from "@/lib/materials/constants";
 import { createTextSchema, registerPdfSchema, validateOwnedPdfBlob } from "@/lib/materials/validation";
 
 export async function POST(request: Request) {
   const user = await requireUser();
-  const body: unknown = await request.json();
+  const body: unknown = await request.json().catch(() => null);
+  const association = z.object({ courseId: z.uuid() }).safeParse(body);
+  if (!association.success) return Response.json({ error: "Choose a course before adding material." }, { status: 400 });
+  const [course] = await db.select({ id: courses.id }).from(courses)
+    .where(and(eq(courses.id, association.data.courseId), eq(courses.ownerId, user.id))).limit(1);
+  if (!course) return Response.json({ error: "Course not found." }, { status: 404 });
   const sourceType = typeof body === "object" && body && "sourceType" in body
     ? body.sourceType
     : null;
@@ -24,8 +31,12 @@ export async function POST(request: Request) {
       }
       const validationError = validateOwnedPdfBlob(user.id, blob);
       if (validationError) return Response.json({ error: validationError }, { status: 400 });
+      if (!blob.pathname.startsWith(`${materialUploadPrefix(user.id)}${course.id}/`)) {
+        return Response.json({ error: "This upload belongs to a different course." }, { status: 400 });
+      }
 
       const [material] = await db.insert(materials).values({
+        courseId: course.id,
         ownerId: user.id,
         sourceType: "pdf",
         originalFilename: parsed.data.originalFilename,
@@ -53,6 +64,7 @@ export async function POST(request: Request) {
         { access: "private", contentType: "text/plain; charset=utf-8" },
       );
       const [material] = await db.insert(materials).values({
+        courseId: course.id,
         ownerId: user.id,
         sourceType: "text",
         originalFilename: parsed.data.title,

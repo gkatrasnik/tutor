@@ -17,9 +17,11 @@ export async function POST(
 
   try {
     await processMaterial(parsed.data, user.id);
-    return Response.json({ ok: true });
   } catch (error) {
     const message = error instanceof MaterialProcessingError ? error.message : "Material processing failed.";
     return Response.json({ error: message }, { status: 422 });
   }
+
+  // Learners choose when all course sources are ready; indexing never generates.
+  return Response.json({ ok: true });
 }

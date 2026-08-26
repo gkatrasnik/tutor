@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -18,6 +19,8 @@ export const materialStatus = pgEnum("material_status", [
   "failed",
 ]);
 
+export const courseStatus = pgEnum("course_status", ["pending", "generating", "ready", "failed"]);
+
 export const profiles = pgTable("profiles", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
@@ -29,6 +32,7 @@ export const materials = pgTable(
   "materials",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "restrict" }),
     ownerId: text("owner_id")
       .notNull()
       .references(() => profiles.id, { onDelete: "cascade" }),
@@ -46,7 +50,10 @@ export const materials = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
-  (table) => [index("materials_owner_created_idx").on(table.ownerId, table.createdAt)],
+  (table) => [
+    index("materials_owner_created_idx").on(table.ownerId, table.createdAt),
+    index("materials_owner_course_idx").on(table.ownerId, table.courseId),
+  ],
 );
 
 export const materialChunks = pgTable(
@@ -76,6 +83,42 @@ export const materialChunks = pgTable(
   ],
 );
 
+export const courses = pgTable("courses", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  ownerId: text("owner_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  status: courseStatus("status").default("pending").notNull(),
+  title: text("title"),
+  summary: text("summary"),
+  lessonCount: integer("lesson_count").default(0).notNull(),
+  sourceVersion: integer("source_version").default(0).notNull(),
+  outlineVersion: integer("outline_version").default(-1).notNull(),
+  generationError: text("generation_error"),
+  generationToken: uuid("generation_token"),
+  generationStartedAt: timestamp("generation_started_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("courses_owner_created_idx").on(table.ownerId, table.createdAt),
+]);
+
+export const lessons = pgTable("lessons", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  ownerId: text("owner_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  ordinal: integer("ordinal").notNull(),
+  title: text("title").notNull(),
+  objective: text("objective").notNull(),
+  concepts: jsonb("concepts").$type<string[]>().notNull(),
+  retrievalQuery: text("retrieval_query").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("lessons_course_ordinal_unique").on(table.courseId, table.ordinal),
+  index("lessons_owner_course_idx").on(table.ownerId, table.courseId),
+]);
+
+export type Course = typeof courses.$inferSelect;
+export type Lesson = typeof lessons.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;
 export type Material = typeof materials.$inferSelect;
 export type MaterialChunk = typeof materialChunks.$inferSelect;

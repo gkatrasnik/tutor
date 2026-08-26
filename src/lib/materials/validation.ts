@@ -3,12 +3,14 @@ import { z } from "zod";
 import { MAX_PDF_BYTES, MAX_TEXT_CHARACTERS, materialUploadPrefix } from "./constants";
 
 export const registerPdfSchema = z.object({
+  courseId: z.uuid(),
   url: z.url(),
   pathname: z.string().min(1),
   originalFilename: z.string().trim().min(1).max(255),
 });
 
 export const createTextSchema = z.object({
+  courseId: z.uuid(),
   title: z.string().trim().min(1, "Give your notes a title.").max(255),
   text: z.string().trim().min(1, "Paste some text first.").max(
     MAX_TEXT_CHARACTERS,

@@ -15,6 +15,7 @@ async function mutate(url: string, method: "POST" | "DELETE") {
   const response = await fetch(url, { method });
   const result = (await response.json()) as { error?: string };
   if (!response.ok) throw new Error(result.error ?? "Something went wrong.");
+  return result;
 }
 
 export function MaterialActions({
@@ -35,7 +36,7 @@ export function MaterialActions({
     setBusy(true);
     try {
       await mutate(`/api/materials/${id}/process`, "POST");
-      toast.success("Material is ready.");
+      toast.success("Material indexed. Generate or update the outline from your course.");
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Retry failed.");
@@ -69,7 +70,7 @@ export function MaterialActions({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this material?</AlertDialogTitle>
-            <AlertDialogDescription>This permanently removes “{title}” and its private stored files.</AlertDialogDescription>
+            <AlertDialogDescription>This permanently removes “{title}” and its private stored files. The course stays; its outline will need updating to reflect the remaining materials.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>

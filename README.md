@@ -2,7 +2,7 @@
 
 Tutor turns a learner's private PDF or pasted text into a focused course and a grounded, Socratic tutoring experience.
 
-This repository currently contains **Iterations 1–5: Foundation, Neon database discipline, magic-link authentication, private material uploads, and Cohere-backed retrieval** from the implementation plan.
+This repository currently contains **Iterations 1–6: Foundation, Neon database discipline, magic-link authentication, private material uploads, Cohere-backed retrieval, and structured course outlines** from the implementation plan.
 
 ## Start locally
 
@@ -77,7 +77,8 @@ src/app/
 ├── (public)/page.tsx               → /
 ├── (public)/auth/                   → /auth/sign-in and /auth/callback
 ├── (authenticated)/app/            → /app
-│   └── materials/                   → /app/materials
+│   ├── materials/                   → /app/materials
+│   └── courses/[id]/                → /app/courses/:id
 ├── (admin)/admin/                   → /admin
 ├── globals.css
 └── layout.tsx
@@ -101,3 +102,31 @@ Material processing now normalizes source text, creates page-aware chunks of app
 Create a dedicated Tutor AI Gateway API key, enable a $5 monthly spend quota, and add `AI_GATEWAY_API_KEY` to `.env.local` plus the Vercel Development, Preview, and Production environments. Keep auto-top-up disabled. Although Vercel deployments can authenticate automatically through OIDC, this app intentionally uses the dedicated key so the plan's per-key budget applies to every embedding and generation request.
 
 In development, ready materials have a search icon that opens the retrieval inspector. It displays the six closest owned chunks with similarity, excerpt, ordinal, and PDF page metadata. The inspector returns 404 in production.
+
+## Course outlines (Iteration 6)
+
+Run `pnpm db:migrate` before starting or deploying this iteration. Migration `0003_course_outlines.sql` adds outlines; `0004_course_first_materials.sql` changes the relationship to **one course → many materials**. Stop the old app while applying the latter migration, then start/deploy the updated code. Existing courses keep their IDs, outlines, and lessons. Existing materials keep their files, IDs, and embeddings, and become attached to their original course; materials without a course receive a named draft course. No new secrets are needed: outlines use the existing `AI_GATEWAY_API_KEY` and `TUTOR_MODEL` (default `alibaba/qwen3.7-flash`).
+
+Create a named course at `/app`, then open `/app/courses/:id` to upload PDFs (one at a time) and paste multiple sets of notes. All materials require an owned course. Uploading only stores and indexes each material; it does not generate an outline. Once every source is indexed, click **Generate outline** to synthesize all course materials into a title, summary, and 4–8 ordered lessons, each with an objective, key concepts, and a retrieval query for future tutoring. The course name remains the learner's chosen name, separate from the generated outline title.
+
+The model receives ordered, owner- and course-scoped chunks grouped by source ID and filename, with page metadata kept separate. Combined input is limited to 300 chunks and 200,000 indexed characters (including overlap); exceeding either limit shows an error rather than silently dropping sources. AI SDK structured output is Zod-validated, thinking is disabled with `reasoning: "none"`, and each attempt is limited to 2,500 output tokens and 45 seconds. Invalid structured output gets one automatic retry; other failures require a user retry. No tools or external lookup are enabled.
+
+`/app/materials` remains an overview across courses, with links back to each course. A failed outline leaves materials and embeddings ready; **Retry outline** calls `POST /api/courses/:id/outline` without re-indexing. These requests run synchronously, so keep the page open while generating. Interrupted generation claims can be reclaimed after five minutes by clicking **Check generation**. This is not a background job queue.
+
+Adding, removing, or re-indexing material increments the course's `source_version` through a database trigger. The old outline remains visible and is marked out of date; click **Update outline** after the source changes are complete. Current outlines are reused without another model call. Manual outline editing remains out of scope. Deleting a material removes only its files and chunks, not its course or lessons. Course deletion is not exposed; its foreign key restricts deletion while it still has material files to clean up.
+
+An atomic database claim prevents overlapping active attempts. Publication uses a Neon HTTP `db.batch` transaction: lock the course, delete previous lessons, insert the replacement lessons, and update the outline version. Every statement is guarded by the owner, course, generation token, and source version. The trigger takes the same course row lock, so source changes cannot be published as current. Failed publication rolls back to the previous outline; stale workers cannot overwrite a newer attempt. The old per-material generation endpoint has been removed.
+
+Interactive tutoring, lesson completion, and stored learner progress belong to the next iterations. Progress is currently an honest 0%; viewing an outline does not mark any lesson complete.
+
+### Try it locally
+
+1. Apply the migrations, then start the app and sign in. Check that old courses/materials still exist.
+2. Create a course named “Biology revision”. It should open immediately with no materials or outline.
+3. Upload a PDF and paste notes into that same course. Both should become indexed, without automatically generating lessons.
+4. Click **Generate outline**. Expand the 4–8 lessons and check that they cover both sources in a sensible order.
+5. Add a third source. The old outline should be marked out of date; **Update outline** should include the new source without re-embedding the earlier ones.
+6. Delete one source. The course and old outline should remain; update again using the remaining materials.
+7. Sign in as a different user: the course must not appear, its direct URL must show not found, and uploads/generation targeting it must be rejected.
+
+Automated tests cover output validation/retries, provider settings, course creation and upload ownership, multiple sources, input limits, stale generation, migration preservation, and atomic outline replacement. Course-service tests keep the real Neon HTTP adapter but execute its SQL against isolated PGlite PostgreSQL, not your Neon database. The test fixture substitutes an array for pgvector (vector search is not under test); all course migration and transaction SQL runs unchanged. Providers and Blob storage are mocked. The steps above exercise live Neon, Blob, and AI Gateway.

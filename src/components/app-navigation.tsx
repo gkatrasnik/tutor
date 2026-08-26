@@ -16,7 +16,9 @@ export function AppNavigation({ mobile = false }: { mobile?: boolean }) {
   const pathname = usePathname();
 
   return navigation.map((item) => {
-    const active = item.href === "/app" ? pathname === item.href : pathname.startsWith(item.href);
+    const active = item.href === "/app"
+      ? pathname === item.href || pathname.startsWith("/app/courses/")
+      : pathname.startsWith(item.href);
     return (
       <Link
         key={item.href}

@@ -38,6 +38,7 @@ import { processMaterial } from "./processing";
 
 const material: Material = {
   id: "aca9b80d-e56a-4728-b399-c416806b5069",
+  courseId: "02564de2-4a8b-4426-8fe2-4e92cc1265ea",
   ownerId: "learner-a",
   sourceType: "text",
   originalFilename: "Notes",

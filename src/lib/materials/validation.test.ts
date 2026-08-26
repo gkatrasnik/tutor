@@ -21,7 +21,12 @@ describe("material validation", () => {
   });
 
   it("enforces the pasted-text limit", () => {
-    expect(createTextSchema.safeParse({ title: "Notes", text: "x".repeat(100_001) }).success).toBe(false);
+    expect(createTextSchema.safeParse({ courseId: "02564de2-4a8b-4426-8fe2-4e92cc1265ea", title: "Notes", text: "x".repeat(100_001) }).success).toBe(false);
+  });
+
+  it("requires a valid course association for text material", () => {
+    expect(createTextSchema.safeParse({ title: "Notes", text: "Some notes" }).success).toBe(false);
+    expect(createTextSchema.safeParse({ courseId: "02564de2-4a8b-4426-8fe2-4e92cc1265ea", title: "Notes", text: "Some notes" }).success).toBe(true);
   });
 
   it("normalizes extracted PDF text", () => {

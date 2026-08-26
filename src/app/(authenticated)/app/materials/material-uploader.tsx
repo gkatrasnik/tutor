@@ -23,7 +23,7 @@ async function parseResponse(response: Response) {
   return result;
 }
 
-export function MaterialUploader({ userId }: { userId: string }) {
+export function MaterialUploader({ userId, courseId }: { userId: string; courseId: string }) {
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -35,7 +35,7 @@ export function MaterialUploader({ userId }: { userId: string }) {
     setProgress(90);
     await parseResponse(await fetch(`/api/materials/${id}/process`, { method: "POST" }));
     setProgress(100);
-    toast.success("Material is ready to use.");
+    toast.success("Material indexed. Add more sources or generate your course outline when ready.");
     router.refresh();
   }
 
@@ -51,11 +51,12 @@ export function MaterialUploader({ userId }: { userId: string }) {
     setError(null);
     setProgress(5);
     try {
-      const pathname = `${materialUploadPrefix(userId)}${crypto.randomUUID()}.pdf`;
+      const pathname = `${materialUploadPrefix(userId)}${courseId}/${crypto.randomUUID()}.pdf`;
       const blob = await upload(pathname, file, {
         access: "private",
         handleUploadUrl: "/api/materials/upload",
         contentType: "application/pdf",
+        clientPayload: JSON.stringify({ courseId }),
         onUploadProgress: ({ percentage }) => setProgress(Math.max(5, Math.round(percentage * 0.75))),
       });
       setProgress(80);
@@ -64,6 +65,7 @@ export function MaterialUploader({ userId }: { userId: string }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           sourceType: "pdf",
+          courseId,
           url: blob.url,
           pathname: blob.pathname,
           originalFilename: file.name,
@@ -93,7 +95,7 @@ export function MaterialUploader({ userId }: { userId: string }) {
       const created = await parseResponse(await fetch("/api/materials", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sourceType: "text", title, text }),
+        body: JSON.stringify({ sourceType: "text", courseId, title, text }),
       }));
       if (!created.id) throw new Error("The material could not be created.");
       setProgress(75);
@@ -156,7 +158,8 @@ export function MaterialUploader({ userId }: { userId: string }) {
       </Tabs>
       {busy ? (
         <div className="mt-5 space-y-2" aria-live="polite">
-          <div className="flex justify-between text-xs text-stone-500"><span>Preparing your material…</span><span>{progress}%</span></div>
+          <div className="flex justify-between text-xs text-stone-500"><span>{progress >= 90 ? "Indexing your material…" : "Preparing your material…"}</span><span>{progress}%</span></div>
+          {progress >= 90 ? <p className="text-xs text-stone-500">This can take a few minutes. Keep this page open.</p> : null}
           <Progress value={progress} />
         </div>
       ) : null}

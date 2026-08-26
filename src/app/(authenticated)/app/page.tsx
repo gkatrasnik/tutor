@@ -1,32 +1,27 @@
-import { ArrowRight, BookOpenText, FileUp, MoreHorizontal, Plus } from "lucide-react";
+import { and, count, desc, eq } from "drizzle-orm";
+import { BookOpenText } from "lucide-react";
 import Link from "next/link";
 
+import { CreateCourseForm } from "@/components/courses/create-course-form";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { db } from "@/db";
+import { courses, materials } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
-
-const courses = [
-  {
-    title: "The science of attention",
-    source: "attention-and-memory.pdf",
-    progress: 25,
-    detail: "1 of 4 lessons",
-  },
-  {
-    title: "Foundations of systems thinking",
-    source: "systems-notes.pdf",
-    progress: 67,
-    detail: "4 of 6 lessons",
-  },
-];
 
 export const dynamic = "force-dynamic";
 
 export default async function CoursesPage() {
   const user = await requireUser();
   const firstName = user.name?.trim().split(/\s+/)[0] || "learner";
+  const library = await db.select({
+    courseId: courses.id, name: courses.name, summary: courses.summary,
+    status: courses.status, lessonCount: courses.lessonCount, error: courses.generationError,
+    sourceVersion: courses.sourceVersion, outlineVersion: courses.outlineVersion, materialCount: count(materials.id),
+  }).from(courses).leftJoin(materials, and(eq(materials.courseId, courses.id), eq(materials.ownerId, user.id)))
+    .where(eq(courses.ownerId, user.id)).groupBy(courses.id).orderBy(desc(courses.createdAt));
 
   return (
     <main className="mx-auto max-w-6xl p-5 sm:p-8 lg:p-10">
@@ -34,65 +29,53 @@ export default async function CoursesPage() {
         <div>
           <p className="text-sm font-medium text-emerald-700">Your learning space</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-stone-950">Welcome back, {firstName}.</h1>
-          <p className="mt-2 text-stone-500">Pick up where you left off or turn new material into a course.</p>
+          <p className="mt-2 text-stone-500">Explore a learning path grounded in your own material.</p>
         </div>
-        <Link href="/app/materials" className={buttonVariants({ size: "lg" })}>
-          <Plus data-icon="inline-start" aria-hidden="true" />
-          Add material
-        </Link>
       </div>
-
-      <section className="mt-10" aria-labelledby="continue-heading">
+      <Card className="mt-8 bg-white">
+        <CardHeader><CardTitle>Create a course</CardTitle><CardDescription>Give it a name, add your materials, then generate one shared learning path.</CardDescription></CardHeader>
+        <CardContent><CreateCourseForm /></CardContent>
+      </Card>
+      <section className="mt-10" aria-labelledby="courses-heading">
         <div className="mb-4 flex items-center justify-between">
-          <h2 id="continue-heading" className="text-lg font-semibold tracking-tight">Continue learning</h2>
-          <Badge variant="outline">2 active</Badge>
+          <h2 id="courses-heading" className="text-lg font-semibold tracking-tight">Your courses</h2>
+          <Badge variant="outline">{library.length} {library.length === 1 ? "course" : "courses"}</Badge>
         </div>
-        <div className="grid gap-5 lg:grid-cols-2">
-          {courses.map((course, index) => (
-            <Card key={course.title} className="group border-stone-200 bg-white transition-shadow hover:shadow-md">
-              <CardHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <span className={index === 0
-                    ? "flex size-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800"
-                    : "flex size-11 items-center justify-center rounded-2xl bg-amber-100 text-amber-800"}>
-                    <BookOpenText className="size-5" aria-hidden="true" />
-                  </span>
-                  <Button variant="ghost" size="icon" aria-label={`More options for ${course.title}`}>
-                    <MoreHorizontal aria-hidden="true" />
-                  </Button>
-                </div>
-                <CardTitle className="mt-4 text-xl">{course.title}</CardTitle>
-                <CardDescription className="truncate">From {course.source}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="mb-2 flex justify-between text-xs text-stone-500">
-                  <span>{course.detail}</span>
-                  <span>{course.progress}%</span>
-                </div>
-                <Progress value={course.progress} aria-label={`${course.progress}% complete`} />
-                <Button variant="outline" className="mt-5 w-full justify-between">
-                  Continue course
-                  <ArrowRight aria-hidden="true" />
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="mt-10" aria-labelledby="new-course-heading">
-        <Card className="border-dashed border-stone-300 bg-transparent shadow-none">
-          <CardContent className="flex flex-col items-center px-6 py-10 text-center">
-            <span className="flex size-12 items-center justify-center rounded-2xl bg-white text-stone-600 shadow-sm ring-1 ring-stone-200">
-              <FileUp className="size-5" aria-hidden="true" />
-            </span>
-            <h2 id="new-course-heading" className="mt-4 font-semibold">Learn something new</h2>
-            <p className="mt-1 max-w-md text-sm leading-6 text-stone-500">
-              Upload a PDF or paste your notes. Tutor will create a private, grounded learning path.
-            </p>
-            <Link href="/app/materials" className={buttonVariants({ variant: "secondary", className: "mt-5" })}>Add material</Link>
-          </CardContent>
-        </Card>
+        {library.length ? (
+          <div className="grid gap-5 lg:grid-cols-2">
+            {library.map((course) => (
+              <Card key={course.courseId} className="border-stone-200 bg-white">
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex size-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800"><BookOpenText className="size-5" aria-hidden="true" /></span>
+                    <Badge variant={course.status === "failed" ? "destructive" : "secondary"}>
+                      {course.status === "generating" ? "Generating" : course.status === "failed" ? "Needs attention" : course.outlineVersion >= 0 && course.outlineVersion !== course.sourceVersion ? "Outline out of date" : course.status === "ready" ? `${course.lessonCount} lessons` : "Draft"}
+                    </Badge>
+                  </div>
+                  <CardTitle className="mt-4 break-words text-xl">{course.name}</CardTitle>
+                  <CardDescription>{course.materialCount} {course.materialCount === 1 ? "material" : "materials"}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {course.summary ? <p className="text-sm leading-6 text-stone-600">{course.summary}</p> : null}
+                  {course.status === "ready" ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-stone-500">0 of {course.lessonCount} lessons completed · Tutoring is coming next</p>
+                      <Progress value={0} aria-label="No lessons completed yet" />
+                    </div>
+                  ) : <p className="text-sm text-stone-500">{course.error ?? (course.status === "generating" ? "Your outline is being prepared. Open the course to check its progress." : "Add your sources and generate an outline when you are ready.")}</p>}
+                  <Link href={`/app/courses/${course.courseId}`} className={buttonVariants({ variant: "outline", size: "sm" })}>Open course</Link>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card className="border-dashed border-stone-300 bg-transparent shadow-none">
+            <CardContent className="px-6 py-10 text-center">
+              <h3 className="font-semibold">Create your first course above</h3>
+              <p className="mt-2 text-sm text-stone-500">Each course can bring together several PDFs and sets of notes.</p>
+            </CardContent>
+          </Card>
+        )}
       </section>
     </main>
   );
