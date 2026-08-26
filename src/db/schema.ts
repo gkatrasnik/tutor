@@ -117,6 +117,53 @@ export const lessons = pgTable("lessons", {
   index("lessons_owner_course_idx").on(table.ownerId, table.courseId),
 ]);
 
+export const messageRole = pgEnum("message_role", ["user", "assistant"]);
+export const messageStatus = pgEnum("message_status", ["pending", "complete", "failed"]);
+
+export const tutorSessions = pgTable("tutor_sessions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: text("owner_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  courseId: uuid("course_id").notNull().references(() => courses.id, { onDelete: "cascade" }),
+  // Preserve conversations when outline replacement deletes a lesson.
+  lessonId: uuid("lesson_id").references(() => lessons.id, { onDelete: "set null" }),
+  lessonTitle: text("lesson_title").notNull(),
+  objective: text("objective").notNull(),
+  retrievalQuery: text("retrieval_query").notNull(),
+  sourceVersion: integer("source_version").notNull(),
+  nextSequence: integer("next_sequence").default(0).notNull(),
+  activeToken: uuid("active_token"),
+  activeStartedAt: timestamp("active_started_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("tutor_sessions_lesson_unique").on(table.lessonId),
+  index("tutor_sessions_owner_course_idx").on(table.ownerId, table.courseId),
+]);
+
+export const messages = pgTable("messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sessionId: uuid("session_id").notNull().references(() => tutorSessions.id, { onDelete: "cascade" }),
+  ownerId: text("owner_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  requestId: uuid("request_id").notNull(),
+  ordinal: integer("ordinal").notNull(),
+  role: messageRole("role").notNull(),
+  status: messageStatus("status").notNull(),
+  content: text("content").default("").notNull(),
+  retrievedChunkIds: jsonb("retrieved_chunk_ids").$type<string[]>().default([]).notNull(),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("messages_session_ordinal_unique").on(table.sessionId, table.ordinal),
+  uniqueIndex("messages_request_role_unique").on(table.sessionId, table.requestId, table.role),
+  index("messages_owner_session_idx").on(table.ownerId, table.sessionId),
+]);
+
+export const tutorDailyUsage = pgTable("tutor_daily_usage", {
+  ownerId: text("owner_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  day: text("day").notNull(),
+  turns: integer("turns").default(0).notNull(),
+}, (table) => [uniqueIndex("tutor_daily_usage_owner_day_unique").on(table.ownerId, table.day)]);
+
 export type Course = typeof courses.$inferSelect;
 export type Lesson = typeof lessons.$inferSelect;
 export type Profile = typeof profiles.$inferSelect;

@@ -59,7 +59,7 @@ export default async function CoursesPage() {
                   {course.summary ? <p className="text-sm leading-6 text-stone-600">{course.summary}</p> : null}
                   {course.status === "ready" ? (
                     <div className="space-y-2">
-                      <p className="text-xs text-stone-500">0 of {course.lessonCount} lessons completed · Tutoring is coming next</p>
+                      <p className="text-xs text-stone-500">{course.lessonCount} lessons · Completion tracking is coming next</p>
                       <Progress value={0} aria-label="No lessons completed yet" />
                     </div>
                   ) : <p className="text-sm text-stone-500">{course.error ?? (course.status === "generating" ? "Your outline is being prepared. Open the course to check its progress." : "Add your sources and generate an outline when you are ready.")}</p>}

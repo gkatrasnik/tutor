@@ -3,7 +3,7 @@ import "server-only";
 import { and, asc, cosineDistance, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { materialChunks } from "@/db/schema";
+import { courses, materialChunks, materials } from "@/db/schema";
 
 import { RETRIEVAL_LIMIT } from "./contracts";
 import { embedQuery } from "./embeddings";
@@ -15,6 +15,20 @@ export type RetrievalResult = {
   content: string;
   similarity: number;
 };
+
+export async function retrieveCourseChunks({ ownerId, courseId, query, signal }: {
+  ownerId: string; courseId: string; query: string; signal?: AbortSignal;
+}) {
+  const queryEmbedding = await embedQuery(query, signal);
+  const distance = cosineDistance(materialChunks.embedding, queryEmbedding);
+  return db.select({ id: materialChunks.id, filename: materials.originalFilename,
+    ordinal: materialChunks.ordinal, pageNumber: materialChunks.pageNumber, content: materialChunks.content,
+  }).from(materialChunks).innerJoin(materials, eq(materials.id, materialChunks.materialId))
+    .innerJoin(courses, eq(courses.id, materials.courseId))
+    .where(and(eq(courses.id, courseId), eq(courses.ownerId, ownerId), eq(materials.ownerId, ownerId),
+      eq(materialChunks.ownerId, ownerId), eq(materials.status, "ready")))
+    .orderBy(asc(distance), asc(materialChunks.id)).limit(RETRIEVAL_LIMIT);
+}
 
 export async function retrieveMaterialChunks({
   ownerId,

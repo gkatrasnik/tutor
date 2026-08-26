@@ -54,11 +54,12 @@ export async function embedDocuments(values: string[]) {
   return embeddings;
 }
 
-export async function embedQuery(value: string) {
+export async function embedQuery(value: string, abortSignal?: AbortSignal) {
   try {
     const result = await embed({
       model: env.EMBEDDING_MODEL,
       value,
+      abortSignal,
       providerOptions: providerOptions("search_query"),
     });
     return validateEmbedding(result.embedding);

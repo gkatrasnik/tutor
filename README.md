@@ -2,7 +2,7 @@
 
 Tutor turns a learner's private PDF or pasted text into a focused course and a grounded, Socratic tutoring experience.
 
-This repository currently contains **Iterations 1–6: Foundation, Neon database discipline, magic-link authentication, private material uploads, Cohere-backed retrieval, and structured course outlines** from the implementation plan.
+This repository currently contains **Iterations 1–7: Foundation, Neon database discipline, magic-link authentication, private material uploads, Cohere-backed retrieval, structured course outlines, and persistent Socratic tutoring** from the implementation plan.
 
 ## Start locally
 
@@ -78,7 +78,8 @@ src/app/
 ├── (public)/auth/                   → /auth/sign-in and /auth/callback
 ├── (authenticated)/app/            → /app
 │   ├── materials/                   → /app/materials
-│   └── courses/[id]/                → /app/courses/:id
+│   ├── courses/[id]/                → /app/courses/:id
+│   └── sessions/[id]/               → /app/sessions/:id
 ├── (admin)/admin/                   → /admin
 ├── globals.css
 └── layout.tsx
@@ -117,7 +118,7 @@ Adding, removing, or re-indexing material increments the course's `source_versio
 
 An atomic database claim prevents overlapping active attempts. Publication uses a Neon HTTP `db.batch` transaction: lock the course, delete previous lessons, insert the replacement lessons, and update the outline version. Every statement is guarded by the owner, course, generation token, and source version. The trigger takes the same course row lock, so source changes cannot be published as current. Failed publication rolls back to the previous outline; stale workers cannot overwrite a newer attempt. The old per-material generation endpoint has been removed.
 
-Interactive tutoring, lesson completion, and stored learner progress belong to the next iterations. Progress is currently an honest 0%; viewing an outline does not mark any lesson complete.
+Interactive tutoring is available from each lesson. Assessment, completion, and stored learner progress belong to Iteration 8. Progress is currently an honest 0%; viewing an outline or chatting does not mark a lesson complete.
 
 ### Try it locally
 
@@ -130,3 +131,41 @@ Interactive tutoring, lesson completion, and stored learner progress belong to t
 7. Sign in as a different user: the course must not appear, its direct URL must show not found, and uploads/generation targeting it must be rejected.
 
 Automated tests cover output validation/retries, provider settings, course creation and upload ownership, multiple sources, input limits, stale generation, migration preservation, and atomic outline replacement. Course-service tests keep the real Neon HTTP adapter but execute its SQL against isolated PGlite PostgreSQL, not your Neon database. The test fixture substitutes an array for pgvector (vector search is not under test); all course migration and transaction SQL runs unchanged. Providers and Blob storage are mocked. The steps above exercise live Neon, Blob, and AI Gateway.
+
+## Socratic tutoring (Iteration 7)
+
+Apply `pnpm db:migrate` before starting this version. Migration `0005_tutor_sessions.sql` adds `tutor_sessions`, `messages`, and `tutor_daily_usage`; no additional secrets are required.
+
+Open a course with a current outline, expand a lesson, and select **Start / resume lesson**. This creates or reuses a persistent session without calling AI. In the conversation, select **Begin lesson** or send a question. The tutor explains one idea briefly, asks one focused question, and favors hints. These behaviors are prompt instructions, not guarantees of factual correctness; inspect the source passages when in doubt.
+
+### Request walkthrough
+
+1. The Server Component loads the owned session and recent saved messages. Only the chat, send controls, and source Sheet are Client Components.
+2. The browser posts a fresh request ID and a message (maximum 2,000 characters) to `/api/tutor/sessions/:id/messages`. The server ignores supplied roles, history, owners, and source IDs: it loads trusted conversation state from the database.
+3. The server checks ownership and the current course/outline version, claims the session atomically, saves the learner message plus a pending answer, and reserves one of 30 tutor turns per UTC day. A concurrent active request receives `409`; an exhausted daily allowance receives `429` before retrieval.
+4. Retrieval embeds the lesson objective, retrieval query, and latest learner message. The cosine query selects the nearest six chunks across **all indexed materials in this course**, with course, material, and chunk ownership filters.
+5. `streamText` uses `TUTOR_MODEL`, `reasoning: "minimal"`, an 800-token output cap, no automatic retries, and a 60-second signal covering retrieval plus generation. Only the last 20 saved messages are included in the model context. No web search or tools are enabled; source text and lesson metadata are explicitly untrusted data.
+6. The route streams newline-delimited `delta` events. After a successful provider finish, a token- and source-version-guarded HTTP transaction saves the answer and retrieved chunk IDs, releases the session, and only then emits `done`. An incomplete/failed answer emits a safe error and is not saved as complete.
+
+The session page shows the latest 100 saved messages. **Sources** opens a shadcn Sheet with the original filename, page (for PDFs), and retrieved excerpt. Labels match the prompt's `[1]`, `[2]`, etc. references. These are retrieved passages, not a claim-by-claim correctness guarantee. Source access is reauthorized on every request; no private Blob URLs are returned. If a cited material was removed or re-indexed, the old reference is shown as unavailable.
+
+### Recovery and source changes
+
+- Returning to a lesson resumes its saved conversation. Replaying an already-completed request ID returns the saved result without another model call or quota reservation.
+- If the browser disconnects, the server continues consuming the bounded stream; Next.js `after` keeps the completion task alive within the route's 120-second duration. Refresh to check the saved result before resending. This is not a durable background queue; a process crash may still interrupt a response.
+- Failed partial answers are not stored as completed answers. Their learner questions remain visible. Interrupted session claims can be replaced after two minutes; tokens fence off late results from the old worker.
+- Once retrieval starts, an attempt consumes the daily allowance even if generation fails or the client disconnects, because embedding/provider work may be billable. The daily limit is shared across sessions and resets at midnight UTC.
+- Adding, deleting, or re-indexing sources makes existing sessions read-only. Regenerating the outline detaches the replaced lesson IDs but **preserves sessions and messages**. Find them under **Recent conversations** on the course page. Start a new current lesson to continue tutoring with the new sources.
+
+The planned full usage/cost ledger, ingestion quotas, and Firewall rate limits remain Iteration 9. The daily tutor reservation is included now so the streaming path is bounded from its first release. Assessments and **Finish lesson** are the next milestone.
+
+### Tutor smoke test
+
+1. Apply the migration, start the app, and open a course containing at least two indexed materials.
+2. Start a lesson and select **Begin lesson**. Verify that text streams and a single opening question appears.
+3. Reply, ask for a hint, and open **Sources**. Check the filename/page/excerpt against your uploaded material.
+4. Reload or navigate away and return: both sides of the conversation should remain.
+5. Open the session URL as another user: access should be denied. The same applies to message and source endpoints.
+6. Add a source and update the outline: the old conversation should remain readable, with new sends disabled.
+
+Automated tests use a fake streaming provider and execute the Neon HTTP adapter's SQL in isolated PostgreSQL. They cover persistence, failures, disconnects, duplicate requests, lease recovery, source-version races, ownership, daily rollover/concurrent quota reservations, and UTF-8 stream framing. Live provider quality and browser interaction still require the smoke test above; no tests send real learner content or incur model charges.

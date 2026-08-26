@@ -1,4 +1,4 @@
-import { and, asc, eq, exists } from "drizzle-orm";
+import { and, asc, desc, eq, exists } from "drizzle-orm";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -10,8 +10,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { StartLesson } from "@/components/tutor/start-lesson";
 import { db } from "@/db";
-import { courses, lessons, materialChunks, materials } from "@/db/schema";
+import { courses, lessons, materialChunks, materials, tutorSessions } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,9 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
   }).from(materials).where(and(eq(materials.courseId, course.id), eq(materials.ownerId, user.id)));
   const canGenerate = sourceStates.length > 0 && sourceStates.every((source) => source.status === "ready" && source.indexed);
   const outdated = course.outlineVersion >= 0 && course.outlineVersion !== course.sourceVersion;
+  const sessions = await db.select({ id: tutorSessions.id, title: tutorSessions.lessonTitle, lessonId: tutorSessions.lessonId })
+    .from(tutorSessions).where(and(eq(tutorSessions.courseId, course.id), eq(tutorSessions.ownerId, user.id)))
+    .orderBy(desc(tutorSessions.updatedAt)).limit(50);
   const outline = course.outlineVersion >= 0
     ? await db.select({ id: lessons.id, ordinal: lessons.ordinal, title: lessons.title, objective: lessons.objective, concepts: lessons.concepts })
       .from(lessons).where(and(eq(lessons.courseId, course.id), eq(lessons.ownerId, user.id))).orderBy(asc(lessons.ordinal))
@@ -85,15 +89,20 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
                       <div className="mt-3 flex flex-wrap gap-2" aria-label="Key concepts">
                         {lesson.concepts.map((concept, index) => <Badge key={`${index}-${concept}`} variant="secondary" className="h-auto whitespace-normal text-left">{concept}</Badge>)}
                       </div>
+                      <StartLesson lessonId={lesson.id} disabled={outdated || course.status !== "ready"} />
                     </AccordionContent>
                   </AccordionItem>
                 ))}
               </Accordion>
             </CardContent>
           </Card>
-          <p className="mt-5 text-sm text-stone-500">This is your saved outline. Interactive tutoring and lesson completion are the next step; no lessons have started yet.</p>
+          <p className="mt-5 text-sm text-stone-500">Open a lesson to learn with your tutor. Assessment and completion tracking are coming next.</p>
         </>
       ) : null}
+      {sessions.length ? <section className="mt-8" aria-labelledby="history-heading">
+        <h2 id="history-heading" className="mb-3 text-lg font-semibold">Recent conversations</h2>
+        <ul className="space-y-2">{sessions.map((session) => <li key={session.id}><Link className="text-sm text-emerald-700 hover:underline" href={`/app/sessions/${session.id}`}>{session.title}{!session.lessonId ? " · Previous outline" : ""}</Link></li>)}</ul>
+      </section> : null}
     </main>
   );
 }
