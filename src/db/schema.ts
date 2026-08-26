@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  check,
   index,
   integer,
   jsonb,
@@ -71,6 +73,8 @@ export const materialChunks = pgTable(
     content: text("content").notNull(),
     tokenCount: integer("token_count").notNull(),
     embedding: vector("embedding", { dimensions: 1536 }).notNull(),
+    // Null means an older index of unknown provenance; never assume its model.
+    embeddingModel: text("embedding_model"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -163,6 +167,32 @@ export const tutorDailyUsage = pgTable("tutor_daily_usage", {
   day: text("day").notNull(),
   turns: integer("turns").default(0).notNull(),
 }, (table) => [uniqueIndex("tutor_daily_usage_owner_day_unique").on(table.ownerId, table.day)]);
+
+export const assessmentStatus = pgEnum("assessment_status", ["pending", "complete", "failed"]);
+
+export const lessonAssessments = pgTable("lesson_assessments", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sessionId: uuid("session_id").notNull().references(() => tutorSessions.id, { onDelete: "cascade" }),
+  ownerId: text("owner_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  requestId: uuid("request_id").notNull(),
+  // Last completed assistant ordinal included in this assessment's evidence.
+  throughOrdinal: integer("through_ordinal").notNull(),
+  messageIds: jsonb("message_ids").$type<string[]>().notNull(),
+  retrievedChunkIds: jsonb("retrieved_chunk_ids").$type<string[]>().default([]).notNull(),
+  status: assessmentStatus("status").default("pending").notNull(),
+  score: integer("score"),
+  strengths: jsonb("strengths").$type<string[]>().default([]).notNull(),
+  gaps: jsonb("gaps").$type<string[]>().default([]).notNull(),
+  nextStep: text("next_step"),
+  error: text("error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("lesson_assessments_request_unique").on(table.sessionId, table.requestId),
+  uniqueIndex("lesson_assessments_snapshot_unique").on(table.sessionId, table.throughOrdinal).where(sql`${table.status} = 'complete'`),
+  index("lesson_assessments_owner_session_idx").on(table.ownerId, table.sessionId, table.createdAt),
+  check("lesson_assessments_score_check", sql`${table.score} between 0 and 100`),
+  check("lesson_assessments_result_check", sql`${table.status} <> 'complete' or (${table.score} is not null and ${table.nextStep} is not null)`),
+]);
 
 export type Course = typeof courses.$inferSelect;
 export type Lesson = typeof lessons.$inferSelect;

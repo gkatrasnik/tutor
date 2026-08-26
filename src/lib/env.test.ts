@@ -7,7 +7,7 @@ describe("environment validation", () => {
     const result = parseEnv({ DATABASE_URL: "postgresql://user:password@example.com/tutor" });
 
     expect(result.TUTOR_MODEL).toBe("alibaba/qwen3.7-flash");
-    expect(result.EMBEDDING_MODEL).toBe("cohere/embed-v4.0");
+    expect(result.EMBEDDING_MODEL).toBe("openai/text-embedding-3-small");
     expect(result.EMBEDDING_DIMENSION).toBe(1536);
   });
 

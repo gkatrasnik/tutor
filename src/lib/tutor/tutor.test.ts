@@ -28,7 +28,7 @@ type Query = { sql: string; params: unknown[]; options: { arrayMode?: boolean } 
 let pg: PGlite;
 let sessionId: string;
 
-beforeAll(async () => { pg = await createTestDatabase(); await pg.exec(migrationSql("0005_tutor_sessions.sql")); }, 30_000);
+beforeAll(async () => { pg = await createTestDatabase(); await pg.exec(migrationSql("0005_tutor_sessions.sql")); await pg.exec(migrationSql("0006_lesson_assessments.sql")); }, 30_000);
 afterAll(async () => { await pg?.close(); });
 beforeEach(async () => {
   vi.resetAllMocks();

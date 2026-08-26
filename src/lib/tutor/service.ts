@@ -3,7 +3,7 @@ import "server-only";
 import { and, desc, eq, exists, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { courses, lessons, materialChunks, materials, messages, tutorDailyUsage, tutorSessions } from "@/db/schema";
+import { courses, lessonAssessments, lessons, materialChunks, materials, messages, tutorDailyUsage, tutorSessions } from "@/db/schema";
 import { TUTOR_DAILY_LIMIT, TUTOR_HISTORY_MESSAGES, TUTOR_LEASE_MS, type ChatMessage } from "./contracts";
 
 export class TutorError extends Error {
@@ -14,7 +14,7 @@ export async function getTutorSession(sessionId: string, ownerId: string) {
   const [session] = await db.select({
     id: tutorSessions.id, courseId: tutorSessions.courseId, lessonId: tutorSessions.lessonId,
     lessonTitle: tutorSessions.lessonTitle, objective: tutorSessions.objective, retrievalQuery: tutorSessions.retrievalQuery,
-    sourceVersion: tutorSessions.sourceVersion, activeStartedAt: tutorSessions.activeStartedAt,
+    sourceVersion: tutorSessions.sourceVersion, nextSequence: tutorSessions.nextSequence, activeStartedAt: tutorSessions.activeStartedAt,
     activeToken: tutorSessions.activeToken, courseName: courses.name, courseStatus: courses.status,
     active: sql<boolean>`coalesce(${tutorSessions.activeToken} is not null and ${tutorSessions.activeStartedAt} > now() - ${TUTOR_LEASE_MS} * interval '1 millisecond', false)`,
     currentSourceVersion: courses.sourceVersion, outlineVersion: courses.outlineVersion,
@@ -95,6 +95,9 @@ export async function prepareTutorTurn(sessionId: string, ownerId: string, reque
     ), interrupted as (
       update ${messages} set status = 'failed', error = 'This response was interrupted. Please send your question again.'
       from claimed where ${messages.sessionId} = claimed.id and ${messages.ownerId} = ${ownerId} and ${messages.status} = 'pending'
+    ), interrupted_assessments as (
+      update ${lessonAssessments} set status = 'failed', error = 'This assessment was interrupted. Please try again.'
+      from claimed where ${lessonAssessments.sessionId} = claimed.id and ${lessonAssessments.ownerId} = ${ownerId} and ${lessonAssessments.status} = 'pending'
     )
     insert into ${messages} (session_id, owner_id, request_id, ordinal, role, status, content)
     select claimed.id, ${ownerId}, ${requestId}::uuid, claimed.next_sequence - 2 + item.position,
@@ -103,7 +106,7 @@ export async function prepareTutorTurn(sessionId: string, ownerId: string, reque
     returning id, role
   `);
   const answer = (claimed.rows as { id: string; role: string }[]).find((row) => row.role === "assistant");
-  if (!answer) throw new TutorError("A response is already running, or the course changed. Refresh and try again; interrupted responses unlock after two minutes.");
+  if (!answer) throw new TutorError("A response or assessment is already running, or the course changed. Refresh and try again; interrupted attempts unlock after two minutes.");
   const turn: PreparedTurn = { session, ownerId, token, messageId: answer.id, message, history: [] };
   try {
     const recent = await db.select({ role: messages.role, content: messages.content }).from(messages)

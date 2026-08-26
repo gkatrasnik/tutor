@@ -14,6 +14,8 @@ import { StartLesson } from "@/components/tutor/start-lesson";
 import { db } from "@/db";
 import { courses, lessons, materialChunks, materials, tutorSessions } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
+import { getLessonProgress } from "@/lib/assessments/service";
+import { courseProgress } from "@/lib/assessments/contracts";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +41,10 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
     ? await db.select({ id: lessons.id, ordinal: lessons.ordinal, title: lessons.title, objective: lessons.objective, concepts: lessons.concepts })
       .from(lessons).where(and(eq(lessons.courseId, course.id), eq(lessons.ownerId, user.id))).orderBy(asc(lessons.ordinal))
     : [];
+
+  const lessonProgress = await getLessonProgress(user.id, course.id);
+  const completedIds = new Set(lessonProgress.filter((lesson) => lesson.completed).map((lesson) => lesson.lessonId));
+  const progress = courseProgress(outline.length, completedIds.size);
 
   return (
     <main className="mx-auto max-w-4xl p-5 sm:p-8 lg:p-10">
@@ -75,14 +81,16 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
               <CardDescription>{outline.length} ordered lessons · Open a lesson to see what you will learn.</CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="mb-2 text-xs text-stone-500">0 of {outline.length} lessons completed</p>
-              <Progress value={0} aria-label="No lessons completed yet" />
+              <p className="mb-2 text-xs text-stone-500">{progress.completed} of {progress.total} lessons completed · {progress.percent}%</p>
+              <Progress value={progress.percent} aria-label={`${progress.completed} of ${progress.total} lessons completed`} />
+              {outdated ? <p className="mt-2 text-xs text-stone-500">Progress applies to current sources only. Previous assessments remain in conversation history.</p> : null}
               <Accordion className="mt-5" defaultValue={outline.length ? [outline[0].id] : []}>
                 {outline.map((lesson) => (
                   <AccordionItem key={lesson.id} value={lesson.id}>
                     <AccordionTrigger className="gap-4 py-5">
                       <span className="text-emerald-700">{String(lesson.ordinal + 1).padStart(2, "0")}</span>
                       <span className="flex-1">{lesson.title}</span>
+                      {completedIds.has(lesson.id) ? <Badge variant="secondary">Complete</Badge> : null}
                     </AccordionTrigger>
                     <AccordionContent className="pb-5 pl-8">
                       <p className="leading-6 text-stone-600">{lesson.objective}</p>
@@ -96,7 +104,7 @@ export default async function CoursePage({ params }: { params: Promise<{ id: str
               </Accordion>
             </CardContent>
           </Card>
-          <p className="mt-5 text-sm text-stone-500">Open a lesson to learn with your tutor. Assessment and completion tracking are coming next.</p>
+          <p className="mt-5 text-sm text-stone-500">Use Finish lesson in the conversation to assess your understanding. A saved score of 70 or higher completes that lesson.</p>
         </>
       ) : null}
       {sessions.length ? <section className="mt-8" aria-labelledby="history-heading">

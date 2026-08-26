@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/env", () => ({ env: { EMBEDDING_MODEL: "openai/text-embedding-3-small" } }));
 vi.mock("@vercel/blob", () => ({ get: mocks.get, put: vi.fn() }));
 vi.mock("unpdf", () => ({ extractText: vi.fn(), getDocumentProxy: vi.fn() }));
 vi.mock("@/db", async () => {
@@ -116,13 +117,14 @@ describe("material indexing with the Neon HTTP adapter", () => {
 
     const queries = mocks.transaction.mock.calls[0][0] as QueryRequest[];
     const inserts = queries.slice(1, -1);
-    expect(inserts.map((query) => query.params.length / 7)).toEqual([25, 25, 1]);
+    expect(inserts.map((query) => query.params.length / 8)).toEqual([25, 25, 1]);
     let ordinal = 0;
     for (const insert of inserts) {
-      for (let offset = 0; offset < insert.params.length; offset += 7) {
-        expect(insert.params.slice(offset, offset + 7)).toEqual([
+      for (let offset = 0; offset < insert.params.length; offset += 8) {
+        expect(insert.params.slice(offset, offset + 8)).toEqual([
           material.id, material.ownerId, ordinal, null, `Chunk ${ordinal}`, 10,
           JSON.stringify(Array(1536).fill(ordinal + 1)),
+          "openai/text-embedding-3-small",
         ]);
         ordinal += 1;
       }

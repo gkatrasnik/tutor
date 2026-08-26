@@ -1,0 +1,1 @@
+ALTER TABLE "material_chunks" ADD COLUMN "embedding_model" text;

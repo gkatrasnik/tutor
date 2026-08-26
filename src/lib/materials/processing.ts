@@ -7,6 +7,7 @@ import { extractText, getDocumentProxy } from "unpdf";
 
 import { db } from "@/db";
 import { materialChunks, materials } from "@/db/schema";
+import { env } from "@/lib/env";
 import { chunkMaterialPages, MaterialChunkLimitError, type SourcePage } from "@/lib/rag/chunking";
 import { EmbeddingError, embedDocuments } from "@/lib/rag/embeddings";
 
@@ -113,6 +114,7 @@ export async function processMaterial(materialId: string, ownerId: string) {
           content: chunk.content,
           tokenCount: chunk.tokenCount,
           embedding: embeddings[start + index],
+          embeddingModel: env.EMBEDDING_MODEL,
         }))));
       }
 

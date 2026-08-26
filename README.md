@@ -2,7 +2,7 @@
 
 Tutor turns a learner's private PDF or pasted text into a focused course and a grounded, Socratic tutoring experience.
 
-This repository currently contains **Iterations 1–7: Foundation, Neon database discipline, magic-link authentication, private material uploads, Cohere-backed retrieval, structured course outlines, and persistent Socratic tutoring** from the implementation plan.
+This repository currently contains **Iterations 1–8: Foundation, Neon database discipline, magic-link authentication, private material uploads, Cohere-backed retrieval, structured course outlines, persistent Socratic tutoring, and assessment/progress** from the implementation plan.
 
 ## Start locally
 
@@ -98,7 +98,24 @@ shadcn/ui components live in `src/components/ui`. They are source-owned: the app
 
 ## RAG ingestion and retrieval
 
-Material processing now normalizes source text, creates page-aware chunks of approximately 800 tokens with 100-token overlap, and embeds at most 150 chunks in batches of 50. Stored chunks use Cohere's `search_document` input type; retrieval queries use `search_query`. Both explicitly request 1,536-dimensional float embeddings from `cohere/embed-v4.0` through AI Gateway.
+Material processing normalizes source text, creates page-aware chunks of approximately 800 tokens with 100-token overlap, and embeds at most 150 chunks in batches of 50. Documents and queries use `openai/text-embedding-3-small` through AI Gateway with 1,536 dimensions. The adapter also retains explicit support for `cohere/embed-v4.0` with its document/query input types. Other models need an adapter before being enabled. Each chunk records its embedding model; retrieval rejects unknown/incompatible indexes and filters vectors by the configured model. Gateway requests use no automatic retries and report embedding rate limits separately.
+
+### Changing the embedding model without losing progress
+
+Keep `EMBEDDING_DIMENSION=1536`. Set `EMBEDDING_MODEL=openai/text-embedding-3-small` in `.env.local` and the appropriate Vercel environments, leaving the tutor model and Gateway key unchanged. Migration `0007_embedding_model.sql` adds a nullable model label, not a new vector size. Old rows deliberately start with unknown labels and must be re-embedded.
+
+Pause ingestion/retrieval while switching, including older deployments sharing this database. Then run:
+
+```sh
+pnpm db:migrate
+pnpm embeddings:reembed --dry-run
+pnpm embeddings:reembed --probe
+pnpm embeddings:reembed --apply
+```
+
+The CLI loads Next.js environment files (development by default, production with `NODE_ENV=production`) and targets exactly `DATABASE_URL`, across all owners in that database. Dry-run is the default and makes no AI requests or writes. Probe makes one tiny billable Gateway request. Apply probes again, embeds mismatched/unknown chunks, validates every result, and swaps all replacements in one Neon HTTP transaction. A short write lock and snapshot check reject concurrent chunk changes. Provider failures leave the original index intact; successful reruns skip already-labelled chunks. Source content is sent only to the configured embedding provider and is never logged or saved locally by the script.
+
+Only `material_chunks.embedding` and `embedding_model` change: chunk IDs/content, material status, course source versions, lessons, conversations, citations, and assessment progress are preserved and verified. This is **not** the ordinary material retry/reindex action, which replaces chunks and changes source versions. The atomic CLI is intentionally limited to 2,000 total chunks; larger indexes need a staged migration. Restart/deploy the updated app with the matching model after the command succeeds. Repeat separately for any other Neon branches used by Preview/Production. Free Gateway credits do not guarantee model availability or freedom from rate limits.
 
 Create a dedicated Tutor AI Gateway API key, enable a $5 monthly spend quota, and add `AI_GATEWAY_API_KEY` to `.env.local` plus the Vercel Development, Preview, and Production environments. Keep auto-top-up disabled. Although Vercel deployments can authenticate automatically through OIDC, this app intentionally uses the dedicated key so the plan's per-key budget applies to every embedding and generation request.
 
@@ -118,7 +135,7 @@ Adding, removing, or re-indexing material increments the course's `source_versio
 
 An atomic database claim prevents overlapping active attempts. Publication uses a Neon HTTP `db.batch` transaction: lock the course, delete previous lessons, insert the replacement lessons, and update the outline version. Every statement is guarded by the owner, course, generation token, and source version. The trigger takes the same course row lock, so source changes cannot be published as current. Failed publication rolls back to the previous outline; stale workers cannot overwrite a newer attempt. The old per-material generation endpoint has been removed.
 
-Interactive tutoring is available from each lesson. Assessment, completion, and stored learner progress belong to Iteration 8. Progress is currently an honest 0%; viewing an outline or chatting does not mark a lesson complete.
+Interactive tutoring and assessment are available from each lesson. A saved assessment score of at least 70 completes a lesson. Viewing an outline or chatting alone does not mark it complete.
 
 ### Try it locally
 
@@ -157,7 +174,7 @@ The session page shows the latest 100 saved messages. **Sources** opens a shadcn
 - Once retrieval starts, an attempt consumes the daily allowance even if generation fails or the client disconnects, because embedding/provider work may be billable. The daily limit is shared across sessions and resets at midnight UTC.
 - Adding, deleting, or re-indexing sources makes existing sessions read-only. Regenerating the outline detaches the replaced lesson IDs but **preserves sessions and messages**. Find them under **Recent conversations** on the course page. Start a new current lesson to continue tutoring with the new sources.
 
-The planned full usage/cost ledger, ingestion quotas, and Firewall rate limits remain Iteration 9. The daily tutor reservation is included now so the streaming path is bounded from its first release. Assessments and **Finish lesson** are the next milestone.
+The planned full usage/cost ledger, ingestion quotas, and Firewall rate limits remain Iteration 9. The daily tutor reservation is included now so the streaming path is bounded from its first release. Assessments and **Finish lesson** are available in Iteration 8 below.
 
 ### Tutor smoke test
 
@@ -169,3 +186,41 @@ The planned full usage/cost ledger, ingestion quotas, and Firewall rate limits r
 6. Add a source and update the outline: the old conversation should remain readable, with new sends disabled.
 
 Automated tests use a fake streaming provider and execute the Neon HTTP adapter's SQL in isolated PostgreSQL. They cover persistence, failures, disconnects, duplicate requests, lease recovery, source-version races, ownership, daily rollover/concurrent quota reservations, and UTF-8 stream framing. Live provider quality and browser interaction still require the smoke test above; no tests send real learner content or incur model charges.
+
+## Assessment and progress (Iteration 8)
+
+**Before opening the app:** stop the dev server, run `pnpm db:migrate`, then restart with `pnpm dev`. The new `0006_lesson_assessments.sql` migration is additive: it creates assessment history without modifying existing courses, materials, sessions, or messages. Apply it to the target Neon branch before deploying the new app. No additional secrets or services are required. Generating the migration locally does not apply it to Neon.
+
+After at least two completed tutor exchanges, select **Finish lesson** below the conversation. This is a formative review of the learner's saved answers, not a separate generated quiz. Questions and tutor explanations alone are not evidence of mastery; the prompt asks for conservative scoring when evidence is missing. The result contains a 0–100 integer mastery estimate, strengths, knowledge gaps, and a recommended next step. AI scoring can still be wrong; this is not a formal grade.
+
+### Completion rules
+
+- A validated, persisted score **≥70** completes the current lesson. A lower score keeps it available for practice.
+- Continue the conversation and finish again for another attempt. All results and failed attempts are retained; the history Accordion has newer/older pagination.
+- Finishing an unchanged conversation reuses its successful result without another embedding/model request. Failed attempts may be retried with a fresh request ID.
+- Any passing attempt counts once per lesson. A later lower score does not revoke completion or inflate progress.
+- Course progress is `round(completed current lessons / total current lessons × 100)`, with 0% for an empty outline. It is calculated from saved results, not a model-generated percentage, and appears on both the course page and course cards.
+- Changing sources invalidates current progress. Updating the outline creates new lesson IDs with fresh progress. Older assessments remain with their read-only conversations; they never transfer automatically to revised lessons.
+
+### Request walkthrough
+
+1. The session Server Component loads owned history and deterministic completion. A small Client Component handles Finish, loading/error states, and pagination; the course pages stay Server Components.
+2. The browser posts **only a request ID** to `/api/tutor/sessions/:id/assessments`. The Route Handler authenticates, validates the session ID/body, and rejects client-supplied scores, owners, sources, or history.
+3. The service loads the latest 20 messages from **completed, paired exchanges**, requires at least two exchanges, and atomically claims the same two-minute session lease as tutor sends. A sequence guard rejects a conversation that changed while preparing. Assessment and chat cannot run concurrently within a session.
+4. Retrieval selects the six closest owned chunks from the current course using the lesson objective/query. Empty retrieval fails without grading. Lesson metadata, conversation, and sources are explicitly untrusted JSON data; no web/tools are enabled.
+5. Qwen generates Zod-validated structured output with **reasoning disabled, a 1,000-output-token cap, no automatic retries, and a 60-second timeout** covering retrieval and generation. Invalid or truncated output never grants completion. Prompt constraints are not a guarantee against model mistakes or prompt injection.
+6. A Neon HTTP `db.batch` transaction locks the course and session, checks ownership, source/outline versions, and claim token, then saves the result plus evidence message/chunk IDs and releases the lease. Failed attempts expose safe errors without private provider details. Expired attempts can be reclaimed; late workers cannot save completion or release a newer lease.
+7. The client reloads saved history and refreshes the Server Component data. A lost connection may interrupt the request: refresh history before retrying. Assessment is bounded synchronous work, not a durable background job.
+
+The existing 30-turn quota remains specific to tutor messages; assessments do not consume it. Successful unchanged transcripts are reused, requests have bounded context/output/time, and the configured Gateway key spend cap still applies. The full per-feature usage/cost ledger and rolling AI endpoint rate limit remain Iteration 9; repeated failed assessments are not yet separately quota-limited.
+
+### Assessment smoke test
+
+1. Apply the migration, start the app, and open an existing lesson. Its earlier conversation must still be present.
+2. Complete at least two exchanges, including your own explanation. Select **Finish lesson** and check the score, strengths, gaps, and next step.
+3. If the score is below 70, practice and assess again. Both attempts should remain. A score of 70 or higher should show **Lesson complete**, and the course/card should advance by exactly one lesson.
+4. Finish again without chatting: the same result should be reused. Add a completed exchange and finish again: a new result should appear without double-counting progress.
+5. Reload the session and course. Progress/history should persist. Check a second account cannot read history or submit assessment for this session.
+6. Add a source and update the outline. The old conversation/assessment should stay readable, but its pass must not complete a new lesson.
+
+Automated tests use fake AI providers and isolated PGlite PostgreSQL through the actual Neon HTTP adapter. They cover the 69/70 boundary, retries/history/reuse, input and output validation, failed/truncated generation, empty retrieval, ownership, source changes, lease recovery, stale publication, persistence failure, migration constraints, and deterministic progress. They do not apply production migrations, send real learner content to providers, or validate live model grading quality.

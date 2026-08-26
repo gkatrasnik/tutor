@@ -10,6 +10,8 @@ import { Progress } from "@/components/ui/progress";
 import { db } from "@/db";
 import { courses, materials } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
+import { getLessonProgress } from "@/lib/assessments/service";
+import { courseProgress } from "@/lib/assessments/contracts";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +24,11 @@ export default async function CoursesPage() {
     sourceVersion: courses.sourceVersion, outlineVersion: courses.outlineVersion, materialCount: count(materials.id),
   }).from(courses).leftJoin(materials, and(eq(materials.courseId, courses.id), eq(materials.ownerId, user.id)))
     .where(eq(courses.ownerId, user.id)).groupBy(courses.id).orderBy(desc(courses.createdAt));
+  const lessonProgress = await getLessonProgress(user.id);
+  const progressByCourse = new Map(library.map((course) => {
+    const current = lessonProgress.filter((lesson) => lesson.courseId === course.courseId);
+    return [course.courseId, courseProgress(current.length, current.filter((lesson) => lesson.completed).length)];
+  }));
 
   return (
     <main className="mx-auto max-w-6xl p-5 sm:p-8 lg:p-10">
@@ -59,8 +66,8 @@ export default async function CoursesPage() {
                   {course.summary ? <p className="text-sm leading-6 text-stone-600">{course.summary}</p> : null}
                   {course.status === "ready" ? (
                     <div className="space-y-2">
-                      <p className="text-xs text-stone-500">{course.lessonCount} lessons · Completion tracking is coming next</p>
-                      <Progress value={0} aria-label="No lessons completed yet" />
+                      <p className="text-xs text-stone-500">{progressByCourse.get(course.courseId)!.completed} of {progressByCourse.get(course.courseId)!.total} lessons completed · {progressByCourse.get(course.courseId)!.percent}%</p>
+                      <Progress value={progressByCourse.get(course.courseId)!.percent} aria-label={`Course progress: ${progressByCourse.get(course.courseId)!.percent}%`} />
                     </div>
                   ) : <p className="text-sm text-stone-500">{course.error ?? (course.status === "generating" ? "Your outline is being prepared. Open the course to check its progress." : "Add your sources and generate an outline when you are ready.")}</p>}
                   <Link href={`/app/courses/${course.courseId}`} className={buttonVariants({ variant: "outline", size: "sm" })}>Open course</Link>
