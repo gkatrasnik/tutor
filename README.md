@@ -2,7 +2,7 @@
 
 Tutor turns a learner's private PDF or pasted text into a focused course and a grounded, Socratic tutoring experience.
 
-This repository currently contains **Iterations 1–4: Foundation, Neon database discipline, magic-link authentication, and private material uploads** from the implementation plan.
+This repository currently contains **Iterations 1–5: Foundation, Neon database discipline, magic-link authentication, private material uploads, and Cohere-backed retrieval** from the implementation plan.
 
 ## Start locally
 
@@ -94,4 +94,10 @@ shadcn/ui components live in `src/components/ui`. They are source-owned: the app
 3. Copy the values from `.env.example` into the Vercel project settings and set `NEXT_PUBLIC_APP_URL` to the production origin.
 4. Deploy. Every branch or pull request receives a preview deployment; changes on the production branch promote through the production deployment lifecycle.
 
-AI credentials will be added with the ingestion and generation iterations rather than placing unused secrets in the current application.
+## RAG ingestion and retrieval
+
+Material processing now normalizes source text, creates page-aware chunks of approximately 800 tokens with 100-token overlap, and embeds at most 150 chunks in batches of 50. Stored chunks use Cohere's `search_document` input type; retrieval queries use `search_query`. Both explicitly request 1,536-dimensional float embeddings from `cohere/embed-v4.0` through AI Gateway.
+
+Create a dedicated Tutor AI Gateway API key, enable a $5 monthly spend quota, and add `AI_GATEWAY_API_KEY` to `.env.local` plus the Vercel Development, Preview, and Production environments. Keep auto-top-up disabled. Although Vercel deployments can authenticate automatically through OIDC, this app intentionally uses the dedicated key so the plan's per-key budget applies to every embedding and generation request.
+
+In development, ready materials have a search icon that opens the retrieval inspector. It displays the six closest owned chunks with similarity, excerpt, ordinal, and PDF page metadata. The inspector returns 404 in production.

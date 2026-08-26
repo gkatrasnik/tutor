@@ -1,10 +1,11 @@
 import { desc, eq } from "drizzle-orm";
-import { FileText, Library, Upload } from "lucide-react";
+import { FileText, Library, Search, Upload } from "lucide-react";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/db";
-import { materials } from "@/db/schema";
+import { materialChunks, materials } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
 
 import { MaterialActions } from "./material-actions";
@@ -28,8 +29,13 @@ export const dynamic = "force-dynamic";
 
 export default async function MaterialsPage() {
   const user = await requireUser();
-  const library = await db.select().from(materials)
-    .where(eq(materials.ownerId, user.id)).orderBy(desc(materials.createdAt));
+  const [library, chunkedMaterials] = await Promise.all([
+    db.select().from(materials)
+      .where(eq(materials.ownerId, user.id)).orderBy(desc(materials.createdAt)),
+    db.selectDistinct({ materialId: materialChunks.materialId }).from(materialChunks)
+      .where(eq(materialChunks.ownerId, user.id)),
+  ]);
+  const indexedMaterialIds = new Set(chunkedMaterials.map((row) => row.materialId));
 
   return (
     <main className="mx-auto max-w-6xl p-5 sm:p-8 lg:p-10">
@@ -55,27 +61,45 @@ export default async function MaterialsPage() {
         </div>
         {library.length ? (
           <div className="grid gap-4">
-            {library.map((material) => (
-              <Card key={material.id} className="border-stone-200 bg-white">
-                <CardContent className="flex items-start gap-4 p-5">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-600"><FileText className="size-5" aria-hidden="true" /></span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate font-medium text-stone-950">{material.originalFilename}</h3>
-                      <Badge variant={statusVariants[material.status]}>{statusLabels[material.status]}</Badge>
+            {library.map((material) => {
+              const isIndexed = indexedMaterialIds.has(material.id);
+              return (
+                <Card key={material.id} className="border-stone-200 bg-white">
+                  <CardContent className="flex items-start gap-4 p-5">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-stone-600"><FileText className="size-5" aria-hidden="true" /></span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="truncate font-medium text-stone-950">{material.originalFilename}</h3>
+                        <Badge variant={statusVariants[material.status]}>{statusLabels[material.status]}</Badge>
+                        {material.status === "ready" && !isIndexed ? <Badge variant="outline">Needs indexing</Badge> : null}
+                      </div>
+                      <p className="mt-1 text-xs text-stone-500">
+                        {material.sourceType === "pdf" ? "PDF" : "Pasted text"}
+                        {material.pageCount ? ` · ${material.pageCount} pages` : ""}
+                        {material.characterCount ? ` · ${material.characterCount.toLocaleString()} characters` : ""}
+                        {` · ${new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(material.createdAt)}`}
+                      </p>
+                      {material.processingError ? <p className="mt-2 text-sm text-red-700">{material.processingError}</p> : null}
                     </div>
-                    <p className="mt-1 text-xs text-stone-500">
-                      {material.sourceType === "pdf" ? "PDF" : "Pasted text"}
-                      {material.pageCount ? ` · ${material.pageCount} pages` : ""}
-                      {material.characterCount ? ` · ${material.characterCount.toLocaleString()} characters` : ""}
-                      {` · ${new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(material.createdAt)}`}
-                    </p>
-                    {material.processingError ? <p className="mt-2 text-sm text-red-700">{material.processingError}</p> : null}
-                  </div>
-                  <MaterialActions id={material.id} title={material.originalFilename} canRetry={material.status !== "ready"} />
-                </CardContent>
-              </Card>
-            ))}
+                    <MaterialActions
+                      id={material.id}
+                      title={material.originalFilename}
+                      canRetry={material.status !== "ready" || !isIndexed}
+                      retryLabel={material.status === "ready" && !isIndexed ? "Index" : "Retry"}
+                    />
+                    {process.env.NODE_ENV === "development" && material.status === "ready" && isIndexed ? (
+                      <Link
+                        href={`/app/materials/${material.id}/retrieval`}
+                        className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-stone-500 hover:bg-stone-100 hover:text-stone-950"
+                        aria-label={`Inspect retrieval for ${material.originalFilename}`}
+                      >
+                        <Search className="size-4" aria-hidden="true" />
+                      </Link>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         ) : (
           <Card className="border-dashed border-stone-300 bg-transparent shadow-none">

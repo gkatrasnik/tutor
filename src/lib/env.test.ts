@@ -23,4 +23,11 @@ describe("environment validation", () => {
   it("requires a database connection string", () => {
     expect(() => parseEnv({})).toThrow("DATABASE_URL");
   });
+
+  it("rejects an embedding dimension that does not match the database schema", () => {
+    expect(() => parseEnv({
+      DATABASE_URL: "postgresql://user:password@example.com/tutor",
+      EMBEDDING_DIMENSION: "512",
+    })).toThrow("must remain 1536");
+  });
 });

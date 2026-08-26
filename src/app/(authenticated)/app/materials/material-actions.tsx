@@ -17,7 +17,17 @@ async function mutate(url: string, method: "POST" | "DELETE") {
   if (!response.ok) throw new Error(result.error ?? "Something went wrong.");
 }
 
-export function MaterialActions({ id, title, canRetry }: { id: string; title: string; canRetry: boolean }) {
+export function MaterialActions({
+  id,
+  title,
+  canRetry,
+  retryLabel = "Retry",
+}: {
+  id: string;
+  title: string;
+  canRetry: boolean;
+  retryLabel?: string;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -49,7 +59,7 @@ export function MaterialActions({ id, title, canRetry }: { id: string; title: st
     <div className="flex items-center gap-1">
       {canRetry ? (
         <Button variant="outline" size="sm" onClick={retry} disabled={busy}>
-          {busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />} Retry
+          {busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />} {retryLabel}
         </Button>
       ) : null}
       <AlertDialog>

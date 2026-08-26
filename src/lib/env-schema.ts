@@ -7,7 +7,10 @@ export const envSchema = z.object({
   DATABASE_URL_UNPOOLED: z.url().optional(),
   TUTOR_MODEL: z.string().min(1).default("alibaba/qwen3.7-flash"),
   EMBEDDING_MODEL: z.string().min(1).default("cohere/embed-v4.0"),
-  EMBEDDING_DIMENSION: z.coerce.number().int().positive().default(1536),
+  EMBEDDING_DIMENSION: z.coerce.number().int().refine(
+    (value) => value === 1536,
+    "EMBEDDING_DIMENSION must remain 1536 because the database vector column is fixed at that dimension.",
+  ).default(1536),
   ADMIN_EMAILS: z.string().default(""),
 });
 

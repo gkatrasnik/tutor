@@ -5,6 +5,8 @@ import { MaterialProcessingError, processMaterial } from "@/lib/materials/proces
 
 const idSchema = z.uuid();
 
+export const maxDuration = 60;
+
 export async function POST(
   _request: Request,
   context: { params: Promise<{ id: string }> },
