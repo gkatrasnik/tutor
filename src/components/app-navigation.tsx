@@ -1,16 +1,12 @@
 "use client";
 
-import { BarChart3, BookOpen, Library, ShieldCheck } from "lucide-react";
+import { BookOpen, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 
-const navigation = [
-  { href: "/app", label: "Courses", icon: BookOpen },
-  { href: "/app/materials", label: "Materials", icon: Library },
-  { href: "/app/usage", label: "Usage", icon: BarChart3 },
-];
+const navigation = [{ href: "/app", label: "Courses", icon: BookOpen }];
 
 export function AppNavigation({
   mobile = false,

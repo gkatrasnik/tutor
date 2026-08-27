@@ -1,5 +1,5 @@
 import { and, count, desc, eq } from "drizzle-orm";
-import { BookOpenText } from "lucide-react";
+import { BookOpenText, Database, MessageCircle } from "lucide-react";
 import Link from "next/link";
 
 import { CreateCourseForm } from "@/components/courses/create-course-form";
@@ -18,12 +18,14 @@ import { courses, materials } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
 import { getLessonProgress } from "@/lib/assessments/service";
 import { courseProgress } from "@/lib/assessments/contracts";
+import { getLearnerQuotas } from "@/lib/analytics/service";
 
 export const dynamic = "force-dynamic";
 
 export default async function CoursesPage() {
   const user = await requireUser();
   const firstName = user.name?.trim().split(/\s+/)[0] || "learner";
+  const quotas = await getLearnerQuotas(user.id);
   const library = await db
     .select({
       courseId: courses.id,
@@ -59,6 +61,10 @@ export default async function CoursesPage() {
       ];
     }),
   );
+  const quotaCards = [
+    { label: "Tutor turns", icon: MessageCircle, ...quotas.tutor },
+    { label: "Material ingestion", icon: Database, ...quotas.ingestion },
+  ];
 
   return (
     <main className="mx-auto max-w-6xl p-5 sm:p-8 lg:p-10">
@@ -75,6 +81,37 @@ export default async function CoursesPage() {
           </p>
         </div>
       </div>
+      <section
+        className="mt-8 grid gap-4 sm:grid-cols-2"
+        aria-label="Daily quota remaining"
+      >
+        {quotaCards.map((quota) => (
+          <Card key={quota.label} className="bg-white">
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="flex items-center gap-2">
+                  <quota.icon
+                    className="size-4 text-emerald-700"
+                    aria-hidden="true"
+                  />
+                  {quota.label}
+                </CardTitle>
+                <Badge variant="outline">Resets 00:00 UTC</Badge>
+              </div>
+              <CardDescription>
+                {quota.remaining} remaining today · {quota.used} of{" "}
+                {quota.limit} used
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Progress
+                value={quota.limit ? (quota.used / quota.limit) * 100 : 0}
+                aria-label={`${quota.label}: ${quota.used} of ${quota.limit} used`}
+              />
+            </CardContent>
+          </Card>
+        ))}
+      </section>
       <Card className="mt-8 bg-white">
         <CardHeader>
           <CardTitle>Create a course</CardTitle>

@@ -31,8 +31,10 @@ import {
   tutorSessions,
 } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
+import { isAdminEmail } from "@/lib/auth/authorization";
 import { getLessonProgress } from "@/lib/assessments/service";
 import { courseProgress } from "@/lib/assessments/contracts";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,7 @@ export default async function CoursePage({
   params: Promise<{ id: string }>;
 }) {
   const user = await requireUser();
+  const canInspectRetrieval = isAdminEmail(user.email, env.ADMIN_EMAILS);
   const parsed = z.uuid().safeParse((await params).id);
   if (!parsed.success) notFound();
   const [course] = await db
@@ -153,7 +156,11 @@ export default async function CoursePage({
         <h2 id="sources-heading" className="mb-3 text-lg font-semibold">
           Course materials · {sourceStates.length}
         </h2>
-        <MaterialList ownerId={user.id} courseId={course.id} />
+        <MaterialList
+          ownerId={user.id}
+          courseId={course.id}
+          canInspectRetrieval={canInspectRetrieval}
+        />
       </section>
       <Card className="mt-8 bg-white">
         <CardHeader>

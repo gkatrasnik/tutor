@@ -10,9 +10,11 @@ import { courses, materialChunks, materials } from "@/db/schema";
 export async function MaterialList({
   ownerId,
   courseId,
+  canInspectRetrieval = false,
 }: {
   ownerId: string;
   courseId?: string;
+  canInspectRetrieval?: boolean;
 }) {
   const library = await db
     .select({
@@ -95,7 +97,7 @@ export async function MaterialList({
               {material.error ? (
                 <p className="mt-2 text-sm text-red-700">{material.error}</p>
               ) : null}
-              {process.env.NODE_ENV === "development" &&
+              {canInspectRetrieval &&
               material.status === "ready" &&
               material.indexed ? (
                 <Link

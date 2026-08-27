@@ -10,6 +10,8 @@ describe("AppNavigation", () => {
     const html = renderToStaticMarkup(<AppNavigation />);
 
     expect(html).not.toContain('href="/admin"');
+    expect(html).not.toContain('href="/app/materials"');
+    expect(html).not.toContain('href="/app/usage"');
   });
 
   it("shows the admin link when the server-authorized flag is present", () => {

@@ -31,7 +31,7 @@ vi.mock("@/db", async () => {
   };
 });
 
-import { getAdminAnalytics, getLearnerUsage } from "./service";
+import { getAdminAnalytics, getLearnerQuotas } from "./service";
 
 type Query = { options: { arrayMode: boolean; fullResults: boolean } };
 let pg: PGlite;
@@ -84,16 +84,9 @@ beforeEach(async () => {
 });
 
 describe("learner analytics", () => {
-  it("isolates events, omits administrative fields, and reports remaining daily quotas", async () => {
-    const result = await getLearnerUsage("owner", 1);
-    expect(result.total).toBe(2);
-    expect(result.events).toHaveLength(2);
-    expect(
-      result.events.every(
-        (event) => !("model" in event) && !("costUsd" in event),
-      ),
-    ).toBe(true);
-    expect(result.quotas).toEqual({
+  it("reports only the learner's remaining daily quotas", async () => {
+    const result = await getLearnerQuotas("owner");
+    expect(result).toEqual({
       tutor: { used: 7, limit: 30, remaining: 23 },
       ingestion: { used: 2, limit: 3, remaining: 1 },
     });
@@ -129,6 +122,27 @@ describe("admin analytics", () => {
       errorCode: "provider_rate_limit",
     });
     expect(result.requests).toHaveLength(3);
+    expect(result.users).toEqual([
+      { id: "other", email: "other@example.test" },
+      { id: "owner", email: "owner@example.test" },
+    ]);
+  });
+
+  it("filters every admin metric and request row by user", async () => {
+    const result = await getAdminAnalytics("30d", 1, "owner");
+
+    expect(result.summary).toMatchObject({
+      requests: 2,
+      totalTokens: 120,
+      errors: 1,
+    });
+    expect(result.byUser).toHaveLength(1);
+    expect(result.byUser[0]?.ownerId).toBe("owner");
+    expect(result.requests).toHaveLength(2);
+    expect(
+      result.requests.every((request) => request.ownerId === "owner"),
+    ).toBe(true);
+    expect(result.failures).toHaveLength(1);
   });
 
   it("does not query analytics when the admin guard rejects access", async () => {

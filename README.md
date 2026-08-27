@@ -14,7 +14,7 @@ pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Sign in at `/auth/sign-in`, manage private learning sources at `/app/materials`, and use the allowlisted admin area at `/admin`.
+Open [http://localhost:3000](http://localhost:3000). Sign in at `/auth/sign-in`, manage private learning sources inside courses at `/app`, and use the allowlisted admin area at `/admin`.
 
 ## Debug in VS Code
 
@@ -77,10 +77,9 @@ src/app/
 ├── (public)/page.tsx               → /
 ├── (public)/auth/                   → /auth/sign-in and /auth/callback
 ├── (authenticated)/app/            → /app
-│   ├── materials/                   → /app/materials
 │   ├── courses/[id]/                → /app/courses/:id
 │   ├── sessions/[id]/               → /app/sessions/:id
-│   └── usage/                        → /app/usage
+│   └── materials/[id]/retrieval/    → admin-only retrieval inspector
 ├── (admin)/admin/                   → /admin
 ├── globals.css
 └── layout.tsx
@@ -120,7 +119,7 @@ Only `material_chunks.embedding` and `embedding_model` change: chunk IDs/content
 
 Create a dedicated Tutor AI Gateway API key, enable a $5 monthly spend quota, and add `AI_GATEWAY_API_KEY` to `.env.local` plus the Vercel Development, Preview, and Production environments. Keep auto-top-up disabled. Although Vercel deployments can authenticate automatically through OIDC, this app intentionally uses the dedicated key so the plan's per-key budget applies to every embedding and generation request.
 
-In development, ready materials have a search icon that opens the retrieval inspector. It displays the six closest owned chunks with similarity, excerpt, ordinal, and PDF page metadata. The inspector returns 404 in production.
+For allowlisted administrators, ready material cards link to the retrieval inspector. It displays the six closest owned chunks with similarity, excerpt, ordinal, and PDF page metadata. The page enforces the admin allowlist on the server in every environment; hiding the link is not the authorization boundary.
 
 ## Course outlines (Iteration 6)
 
@@ -130,7 +129,7 @@ Create a named course at `/app`, then open `/app/courses/:id` to upload PDFs (on
 
 The model receives ordered, owner- and course-scoped chunks grouped by source ID and filename, with page metadata kept separate. Combined input is limited to 300 chunks and 200,000 indexed characters (including overlap); exceeding either limit shows an error rather than silently dropping sources. AI SDK structured output is Zod-validated, thinking is disabled with `reasoning: "none"`, and each attempt is limited to 2,500 output tokens and 45 seconds. Invalid structured output gets one automatic retry; other failures require a user retry. No tools or external lookup are enabled.
 
-`/app/materials` remains an overview across courses, with links back to each course. A failed outline leaves materials and embeddings ready; **Retry outline** calls `POST /api/courses/:id/outline` without re-indexing. These requests run synchronously, so keep the page open while generating. Interrupted generation claims can be reclaimed after five minutes by clicking **Check generation**. This is not a background job queue.
+Materials are managed only inside their course; there is no separate cross-course materials page. A failed outline leaves materials and embeddings ready; **Retry outline** calls `POST /api/courses/:id/outline` without re-indexing. These requests run synchronously, so keep the page open while generating. Interrupted generation claims can be reclaimed after five minutes by clicking **Check generation**. This is not a background job queue.
 
 Adding, removing, or re-indexing material increments the course's `source_version` through a database trigger. The old outline remains visible and is marked out of date; click **Update outline** after the source changes are complete. Current outlines are reused without another model call. Manual outline editing remains out of scope. Deleting a material removes only its files and chunks, not its course or lessons. Course deletion is not exposed; its foreign key restricts deletion while it still has material files to clean up.
 
@@ -252,7 +251,7 @@ The embedding-maintenance CLI also records calls. It batches by owner for attrib
 
 - **30 tutor turns per user per UTC day**, shared across sessions.
 - **3 material ingestions per user per UTC day**, shared across courses. Uploading a Blob alone does not count; processing/indexing does. Quota denial leaves the material unchanged and returns HTTP 429.
-- **5 valid AI endpoint requests per user per rolling 60 seconds**, shared across ingestion, outline, tutor, and assessment POSTs. Even saved-result replays count toward this short-window request limit, but do not make AI calls or consume another daily quota. Reading conversations/history does not count. The development retrieval inspector is limited too.
+- **5 valid AI endpoint requests per user per rolling 60 seconds**, shared across ingestion, outline, tutor, and assessment POSTs. Even saved-result replays count toward this short-window request limit, but do not make AI calls or consume another daily quota. Reading conversations/history does not count. Admin retrieval inspection is limited too.
 
 Daily counters and reservation rows are created atomically before work begins. Immediately before the first Gateway call, the reservation is marked started. Extraction/validation/index-compatibility failures before any call release an unused reservation exactly once, against its original UTC day. Once any Gateway request starts, a timeout, 429, other provider failure, or disconnect does not refund the daily quota: billing may already have occurred. Process crashes are conservative; an unreleased reservation counts until the day's allowance resets. No job queue or automatic reconciliation worker is implied.
 
@@ -277,12 +276,12 @@ Trace a tutor request through the authenticated Route Handler, shared rolling li
 
 After applying the migration, send one normal tutor message and inspect its two `ai_usage_events` rows in Neon/Drizzle Studio. Reconcile their model, generation ID, token counts, and reported USD cost with the Gateway dashboard; do not treat missing metadata as zero. Then use the mocked automated tests to reproduce 429s without spending credits. Test real Firewall rejection in Preview after publishing the rule. No live AI calls or production Firewall changes are part of automated tests.
 
-## Learner and admin analytics (Iteration 10)
+## Quotas and admin analytics (Iteration 10)
 
-No migration is required for this iteration. Both views read the Iteration 9 ledger and daily counters directly in dynamic Server Components; there is no public analytics API and no paid Custom Reporting API dependency.
+No migration is required for this iteration. The views read the Iteration 9 ledger and daily counters directly in dynamic Server Components; there is no public analytics API and no paid Custom Reporting API dependency.
 
-Learners can open `/app/usage` to see only their own request timestamp, feature, status, token counts, total latency, time to first token, and remaining tutor/ingestion quotas for the current UTC day. The learner query deliberately does not select model IDs, Gateway generation IDs, safe error codes, or monetary cost. Request history is paginated and explains that one learner action can produce separate retrieval and generation events.
+Learners see only two daily quota cards on `/app`: tutor turns and material ingestion. The learner query reads the current user's daily counters and does not select request history, model IDs, Gateway generation IDs, error codes, or monetary cost. There is no learner usage page.
 
-Allowlisted administrators can open `/admin` for a read-only, date-filtered view containing aggregate requests, tokens, average latency, failures, and actual known USD cost; breakdowns by UTC day, user, model, and feature; highest-usage learners; recent safe failure categories; and paginated per-request metadata. Every admin analytics query enters through `getAdminAnalytics`, which executes `requireAdmin()` before any database read. Unknown provider costs remain visibly distinct from a reported zero, and all aggregates come from locally persisted Gateway metadata for reconciliation with the Gateway dashboard.
+Allowlisted administrators can open `/admin` for a read-only, date- and user-filtered view containing aggregate requests, tokens, average latency, failures, and actual known USD cost; breakdowns by UTC day, user, model, and feature; highest-usage learners; recent safe failure categories; and paginated request history. Every admin analytics query enters through `getAdminAnalytics`, which executes `requireAdmin()` before any database read. Unknown provider costs remain visibly distinct from a reported zero, and all aggregates come from locally persisted Gateway metadata for reconciliation with the Gateway dashboard.
 
-Both pages include loading, empty, narrow-screen table overflow, status, and pagination states. The next iteration is production hardening and the final end-to-end release pass. For a small learning exercise, add an analytics test that verifies a second learner can never appear in `/app/usage` results.
+The admin page includes loading, narrow-screen table overflow, status, and pagination states. Automated analytics tests verify quota reads, admin authorization, date scoping, and user filtering. The next iteration is production hardening and the final end-to-end release pass.

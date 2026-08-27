@@ -39,6 +39,7 @@ import {
   analyticsRanges,
   parseAnalyticsRange,
   parsePage,
+  parseUserFilter,
 } from "@/lib/analytics/contracts";
 import { getAdminAnalytics } from "@/lib/analytics/service";
 
@@ -54,9 +55,15 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const query = await searchParams;
   const range = parseAnalyticsRange(query.range);
   const requestedPage = parsePage(query.page);
-  const analytics = await getAdminAnalytics(range, requestedPage);
+  const userId = parseUserFilter(query.user);
+  const analytics = await getAdminAnalytics(range, requestedPage, userId);
+  const pageHref = (page: number) => {
+    const params = new URLSearchParams({ range, page: String(page) });
+    if (userId) params.set("user", userId);
+    return `/admin?${params}`;
+  };
   if (requestedPage > analytics.pageCount)
-    redirect(`/admin?range=${range}&page=${analytics.pageCount}`);
+    redirect(pageHref(analytics.pageCount));
 
   const summaryCards = [
     {
@@ -120,7 +127,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
               reconciliation.
             </p>
           </div>
-          <form className="flex items-end gap-2" action="/admin">
+          <form className="flex flex-wrap items-end gap-2" action="/admin">
             <label className="grid gap-1 text-xs font-medium text-stone-600">
               Date range
               <select
@@ -131,6 +138,21 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                 {analyticsRanges.map((value) => (
                   <option key={value} value={value}>
                     {rangeLabels[value]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-xs font-medium text-stone-600">
+              User
+              <select
+                name="user"
+                defaultValue={userId ?? ""}
+                className="h-9 min-w-56 rounded-lg border border-input bg-white px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <option value="">All users</option>
+                {analytics.users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.email}
                   </option>
                 ))}
               </select>
@@ -325,7 +347,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
               </Card>
             ) : null}
             <BreakdownCard
-              title="Per-request ledger"
+              title="Request history"
               description="Actual Gateway metadata stored by the application"
             >
               <Table>
@@ -398,7 +420,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
               <Pagination
                 page={analytics.page}
                 pageCount={analytics.pageCount}
-                href={(page) => `/admin?range=${range}&page=${page}`}
+                href={pageHref}
               />
             </BreakdownCard>
           </TabsContent>

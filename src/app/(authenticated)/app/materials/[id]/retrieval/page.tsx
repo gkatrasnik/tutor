@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { db } from "@/db";
 import { materials } from "@/db/schema";
-import { requireUser } from "@/lib/auth/dal";
+import { requireAdmin } from "@/lib/auth/dal";
 import {
   retrieveMaterialChunks,
   type RetrievalResult,
@@ -36,15 +36,14 @@ export default async function RetrievalInspectorPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ query?: string | string[] }>;
 }) {
-  if (process.env.NODE_ENV === "production") notFound();
-
-  const user = await requireUser();
+  const user = await requireAdmin();
   const parsedId = idSchema.safeParse((await params).id);
   if (!parsedId.success) notFound();
 
   const [material] = await db
     .select({
       id: materials.id,
+      courseId: materials.courseId,
       title: materials.originalFilename,
       status: materials.status,
     })
@@ -79,14 +78,14 @@ export default async function RetrievalInspectorPage({
   return (
     <main className="mx-auto max-w-5xl p-5 sm:p-8 lg:p-10">
       <Link
-        href="/app/materials"
+        href={`/app/courses/${material.courseId}`}
         className="inline-flex items-center gap-2 text-sm text-stone-600 hover:text-stone-950"
       >
-        <ArrowLeft className="size-4" aria-hidden="true" /> Back to materials
+        <ArrowLeft className="size-4" aria-hidden="true" /> Back to course
       </Link>
 
       <div className="mt-6">
-        <p className="text-sm font-medium text-emerald-700">Development tool</p>
+        <p className="text-sm font-medium text-emerald-700">Admin tool</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-stone-950">
           Retrieval inspector
         </h1>
