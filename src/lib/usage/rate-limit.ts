@@ -5,18 +5,40 @@ import { db } from "@/db";
 import { aiRateLimits } from "@/db/schema";
 import { AI_REQUESTS_PER_MINUTE, AiLimitError } from "./contracts";
 
+function appHost(request?: Request) {
+  const configuredAppHost = process.env.NEXT_PUBLIC_APP_URL
+    ? new URL(process.env.NEXT_PUBLIC_APP_URL).host
+    : undefined;
+  const allowedHosts = new Set([
+    configuredAppHost,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    process.env.VERCEL_URL,
+  ].filter((host): host is string => Boolean(host)));
+  const requestedHost = request ? new URL(request.url).host : undefined;
+
+  // Prefer the public domain used for this request. Generated deployment URLs
+  // can be inaccessible when Vercel Deployment Protection is enabled.
+  if (requestedHost && allowedHosts.has(requestedHost)) return requestedHost;
+  return configuredAppHost ?? process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
+}
+
 export async function enforceAiRateLimit(ownerId: string, request?: Request) {
   const rule = process.env.VERCEL_FIREWALL_RATE_LIMIT_ID;
   if (rule && process.env.NODE_ENV === "production") {
+    let host: string | undefined;
     try {
-      // Never let a client Host header redirect the SDK (which forwards headers)
-      // to an arbitrary origin. Only send the configured deployment host.
-      const host = process.env.VERCEL_URL ?? new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").host;
+      host = appHost(request);
+      if (!host) throw new Error("No trusted application host is configured.");
       const result = await checkRateLimit(rule, { request, headers: new Headers({ host }), rateLimitKey: ownerId });
       if (result.rateLimited) throw new AiLimitError("Too many AI requests. Please wait a minute and retry.");
-      if (result.error) throw new Error("Firewall rule unavailable.");
+      if (result.error) throw new Error(`Firewall rule unavailable (${result.error}).`);
     } catch (error) {
       if (error instanceof AiLimitError) throw error;
+      console.error("Vercel Firewall rate-limit request failed", {
+        rule,
+        host,
+        error: error instanceof Error ? error.message : "unknown",
+      });
       throw new AiLimitError("The AI rate-limit service is unavailable. Please retry shortly.", 503);
     }
   }

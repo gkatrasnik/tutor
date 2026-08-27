@@ -85,13 +85,14 @@ describe("rolling AI endpoint limit", () => {
   });
   it("keys Firewall checks by server identity and fails closed for missing rules", async () => {
     vi.stubEnv("VERCEL_FIREWALL_RATE_LIMIT_ID", "tutor-ai"); vi.stubEnv("NODE_ENV", "production");
-    vi.stubEnv("VERCEL_URL", "trusted.vercel.app");
-    const request = new Request("https://trusted.vercel.app", { headers: { host: "attacker.test", "x-user-id": "other", cookie: "secret" } });
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://tutor.example.test");
+    vi.stubEnv("VERCEL_URL", "protected-deployment.vercel.app");
+    const request = new Request("https://tutor.example.test", { headers: { host: "attacker.test", "x-user-id": "other", cookie: "secret" } });
     mocks.firewall.mockResolvedValue({ rateLimited: false, error: "not-found" });
     await expect(enforceAiRateLimit("owner", request)).rejects.toMatchObject({ status: 503 });
     const options = mocks.firewall.mock.calls[0][1];
     expect(options.rateLimitKey).toBe("owner");
-    expect([...options.headers.entries()]).toEqual([["host", "trusted.vercel.app"]]);
+    expect([...options.headers.entries()]).toEqual([["host", "tutor.example.test"]]);
     expect(mocks.query).not.toHaveBeenCalled();
     mocks.firewall.mockResolvedValue({ rateLimited: true });
     await expect(enforceAiRateLimit("owner", request)).rejects.toMatchObject({ status: 429 });
