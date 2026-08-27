@@ -13,7 +13,9 @@ export function AuthCallbackClient() {
     let active = true;
 
     async function completeMagicLink() {
-      const verifier = new URLSearchParams(window.location.search).get("neon_auth_session_verifier");
+      const verifier = new URLSearchParams(window.location.search).get(
+        "neon_auth_session_verifier",
+      );
       if (!verifier) {
         if (active) setFailed(true);
         return;
@@ -31,7 +33,9 @@ export function AuthCallbackClient() {
     }
 
     void completeMagicLink();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   if (failed) {
@@ -39,15 +43,22 @@ export function AuthCallbackClient() {
       <Alert variant="destructive">
         <AlertTitle>This sign-in link could not be completed</AlertTitle>
         <AlertDescription>
-          The link may be expired or already used. Return to sign in and request a fresh email.
+          The link may be expired or already used. Return to sign in and request
+          a fresh email.
         </AlertDescription>
       </Alert>
     );
   }
 
   return (
-    <div className="flex items-center justify-center gap-3 text-sm text-stone-600" role="status">
-      <LoaderCircle className="size-5 animate-spin text-emerald-700" aria-hidden="true" />
+    <div
+      className="flex items-center justify-center gap-3 text-sm text-stone-600"
+      role="status"
+    >
+      <LoaderCircle
+        className="size-5 animate-spin text-emerald-700"
+        aria-hidden="true"
+      />
       Completing your secure sign-in…
     </div>
   );

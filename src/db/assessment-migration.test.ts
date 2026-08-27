@@ -17,11 +17,29 @@ it("adds assessments while preserving existing courses, materials, lessons, conv
       INSERT INTO messages(session_id,owner_id,request_id,ordinal,role,status,content)
         VALUES ('00000000-0000-4000-8000-000000000003','owner','00000000-0000-4000-8000-000000000004',0,'user','complete','My explanation');
     `);
-    const tables = ["courses", "materials", "lessons", "tutor_sessions", "messages"];
-    const before = await Promise.all(tables.map(async (table) => (await pg.query(`SELECT * FROM ${table}`)).rows));
+    const tables = [
+      "courses",
+      "materials",
+      "lessons",
+      "tutor_sessions",
+      "messages",
+    ];
+    const before = await Promise.all(
+      tables.map(
+        async (table) => (await pg.query(`SELECT * FROM ${table}`)).rows,
+      ),
+    );
     await pg.exec(migrationSql("0006_lesson_assessments.sql"));
-    const after = await Promise.all(tables.map(async (table) => (await pg.query(`SELECT * FROM ${table}`)).rows));
+    const after = await Promise.all(
+      tables.map(
+        async (table) => (await pg.query(`SELECT * FROM ${table}`)).rows,
+      ),
+    );
     expect(after).toEqual(before);
-    expect((await pg.query("SELECT * FROM lesson_assessments")).rows).toEqual([]);
-  } finally { await pg.close(); }
+    expect((await pg.query("SELECT * FROM lesson_assessments")).rows).toEqual(
+      [],
+    );
+  } finally {
+    await pg.close();
+  }
 }, 30_000);

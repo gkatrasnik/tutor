@@ -16,6 +16,7 @@ export async function createTestDatabase(includeCourseFirst = true) {
   await pg.exec(initial);
   await pg.exec(migrationSql("0002_aromatic_patch.sql"));
   await pg.exec(migrationSql("0003_course_outlines.sql"));
-  if (includeCourseFirst) await pg.exec(migrationSql("0004_course_first_materials.sql"));
+  if (includeCourseFirst)
+    await pg.exec(migrationSql("0004_course_first_materials.sql"));
   return pg;
 }

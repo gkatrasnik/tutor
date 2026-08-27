@@ -19,8 +19,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/lib/env", () => ({ env: { EMBEDDING_MODEL: "openai/text-embedding-3-small" } }));
-vi.mock("@/lib/usage/quotas", () => ({ reserveDailyQuota: mocks.reserve, releaseUnusedQuota: mocks.release }));
+vi.mock("@/lib/env", () => ({
+  env: { EMBEDDING_MODEL: "openai/text-embedding-3-small" },
+}));
+vi.mock("@/lib/usage/quotas", () => ({
+  reserveDailyQuota: mocks.reserve,
+  releaseUnusedQuota: mocks.release,
+}));
 vi.mock("@vercel/blob", () => ({ get: mocks.get, put: vi.fn() }));
 vi.mock("unpdf", () => ({ extractText: vi.fn(), getDocumentProxy: vi.fn() }));
 vi.mock("@/db", async () => {
@@ -28,10 +33,14 @@ vi.mock("@/db", async () => {
   // Keep the real HTTP adapter: db.transaction() must still throw in this test.
   // Only replace the Neon transport so tests need no credentials or network.
   const client = { query: mocks.query, transaction: mocks.transaction };
-  return { db: drizzle({ client: client as unknown as NeonQueryFunction<false, false> }) };
+  return {
+    db: drizzle({
+      client: client as unknown as NeonQueryFunction<false, false>,
+    }),
+  };
 });
 vi.mock("@/lib/rag/chunking", async (importOriginal) => ({
-  ...await importOriginal<typeof import("../rag/chunking")>(),
+  ...(await importOriginal<typeof import("../rag/chunking")>()),
   chunkMaterialPages: mocks.chunkMaterialPages,
 }));
 vi.mock("@/lib/rag/embeddings", () => ({
@@ -64,17 +73,25 @@ let directQueries: QueryRequest[];
 
 function setChunks(count: number) {
   const chunks: ChunkDraft[] = Array.from({ length: count }, (_, ordinal) => ({
-    ordinal, pageNumber: null, content: `Chunk ${ordinal}`, tokenCount: 10,
+    ordinal,
+    pageNumber: null,
+    content: `Chunk ${ordinal}`,
+    tokenCount: 10,
   }));
   mocks.chunkMaterialPages.mockReturnValue(chunks);
-  mocks.embedDocuments.mockResolvedValue(chunks.map((chunk) => Array(1536).fill(chunk.ordinal + 1)));
+  mocks.embedDocuments.mockResolvedValue(
+    chunks.map((chunk) => Array(1536).fill(chunk.ordinal + 1)),
+  );
 }
 
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.reserve.mockResolvedValue("test-reservation");
   directQueries = [];
-  mocks.get.mockResolvedValue({ statusCode: 200, stream: new Response("Notes").body });
+  mocks.get.mockResolvedValue({
+    statusCode: 200,
+    stream: new Response("Notes").body,
+  });
   setChunks(1);
 
   mocks.query.mockImplementation((sql: string, params: unknown[]) => ({
@@ -83,17 +100,23 @@ beforeEach(() => {
     // Model Neon's lazy queries: constructing a batch query must not execute it.
     then(resolve: (value: { rows: unknown[][] }) => unknown) {
       directQueries.push({ sql, params });
-      const owned = params.includes(material.ownerId) && params.includes(material.id);
-      const rows = sql.startsWith("select") && owned
-        ? [Object.keys(getTableColumns(materials)).map((key) => {
-          const value = material[key as keyof Material];
-          return value instanceof Date ? value.toISOString() : value;
-        })]
-        : [];
+      const owned =
+        params.includes(material.ownerId) && params.includes(material.id);
+      const rows =
+        sql.startsWith("select") && owned
+          ? [
+              Object.keys(getTableColumns(materials)).map((key) => {
+                const value = material[key as keyof Material];
+                return value instanceof Date ? value.toISOString() : value;
+              }),
+            ]
+          : [];
       return Promise.resolve({ rows }).then(resolve);
     },
   }));
-  mocks.transaction.mockImplementation(async (queries: QueryRequest[]) => queries.map(() => ({ rows: [] })));
+  mocks.transaction.mockImplementation(async (queries: QueryRequest[]) =>
+    queries.map(() => ({ rows: [] })),
+  );
 });
 
 describe("material indexing with the Neon HTTP adapter", () => {
@@ -122,12 +145,19 @@ describe("material indexing with the Neon HTTP adapter", () => {
 
     const queries = mocks.transaction.mock.calls[0][0] as QueryRequest[];
     const inserts = queries.slice(1, -1);
-    expect(inserts.map((query) => query.params.length / 8)).toEqual([25, 25, 1]);
+    expect(inserts.map((query) => query.params.length / 8)).toEqual([
+      25, 25, 1,
+    ]);
     let ordinal = 0;
     for (const insert of inserts) {
       for (let offset = 0; offset < insert.params.length; offset += 8) {
         expect(insert.params.slice(offset, offset + 8)).toEqual([
-          material.id, material.ownerId, ordinal, null, `Chunk ${ordinal}`, 10,
+          material.id,
+          material.ownerId,
+          ordinal,
+          null,
+          `Chunk ${ordinal}`,
+          10,
           JSON.stringify(Array(1536).fill(ordinal + 1)),
           "openai/text-embedding-3-small",
         ]);
@@ -139,33 +169,51 @@ describe("material indexing with the Neon HTTP adapter", () => {
   });
 
   it("marks a rejected batch failed without exposing database details", async () => {
-    mocks.transaction.mockRejectedValue(new Error("private SQL and vector parameters"));
+    mocks.transaction.mockRejectedValue(
+      new Error("private SQL and vector parameters"),
+    );
 
-    await expect(processMaterial(material.id, material.ownerId)).rejects.toThrow("search index could not be saved");
+    await expect(
+      processMaterial(material.id, material.ownerId),
+    ).rejects.toThrow("search index could not be saved");
     const lastQuery = directQueries.at(-1)!;
     expect(lastQuery.params).toContain("failed");
     expect(lastQuery.params).toContain(material.ownerId);
     expect(lastQuery.params.join(" ")).not.toContain("private SQL");
-    expect(directQueries.some((query) => query.params.includes("ready"))).toBe(false);
+    expect(directQueries.some((query) => query.params.includes("ready"))).toBe(
+      false,
+    );
   });
 
   it("does no Blob, embedding, or batch work for another user's material", async () => {
-    await expect(processMaterial(material.id, "learner-b")).rejects.toThrow("Material not found");
+    await expect(processMaterial(material.id, "learner-b")).rejects.toThrow(
+      "Material not found",
+    );
     expect(mocks.get).not.toHaveBeenCalled();
     expect(mocks.embedDocuments).not.toHaveBeenCalled();
     expect(mocks.transaction).not.toHaveBeenCalled();
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
   it("rejects a spent ingestion quota before Blob work or processing-state changes", async () => {
-    mocks.reserve.mockRejectedValueOnce(new AiLimitError("Daily ingestion limit"));
-    await expect(processMaterial(material.id, material.ownerId)).rejects.toMatchObject({ status: 429 });
-    expect(mocks.get).not.toHaveBeenCalled(); expect(mocks.embedDocuments).not.toHaveBeenCalled();
+    mocks.reserve.mockRejectedValueOnce(
+      new AiLimitError("Daily ingestion limit"),
+    );
+    await expect(
+      processMaterial(material.id, material.ownerId),
+    ).rejects.toMatchObject({ status: 429 });
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.embedDocuments).not.toHaveBeenCalled();
     expect(directQueries).toHaveLength(1);
   });
   it("cleans up an unused reservation after extraction fails", async () => {
     mocks.get.mockRejectedValueOnce(new Error("Blob unavailable"));
-    await expect(processMaterial(material.id, material.ownerId)).rejects.toThrow();
+    await expect(
+      processMaterial(material.id, material.ownerId),
+    ).rejects.toThrow();
     expect(mocks.embedDocuments).not.toHaveBeenCalled();
-    expect(mocks.release).toHaveBeenCalledExactlyOnceWith("test-reservation", material.ownerId);
+    expect(mocks.release).toHaveBeenCalledExactlyOnceWith(
+      "test-reservation",
+      material.ownerId,
+    );
   });
 });

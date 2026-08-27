@@ -3,12 +3,7 @@ export function normalizeEmail(email: string) {
 }
 
 export function parseAdminEmails(value: string) {
-  return new Set(
-    value
-      .split(",")
-      .map(normalizeEmail)
-      .filter(Boolean),
-  );
+  return new Set(value.split(",").map(normalizeEmail).filter(Boolean));
 }
 
 export function isAdminEmail(email: string, configuredEmails: string) {

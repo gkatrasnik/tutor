@@ -19,17 +19,51 @@ describe("course-first migration", () => {
         VALUES ('00000000-0000-4000-8000-000000000001', 'owner', 0, 'Private source', 3, '{1,2,3}');
       `);
       await pg.exec(migrationSql("0004_course_first_materials.sql"));
-      const courses = (await pg.query("SELECT name, status, source_version, outline_version FROM courses ORDER BY name")).rows;
+      const courses = (
+        await pg.query(
+          "SELECT name, status, source_version, outline_version FROM courses ORDER BY name",
+        )
+      ).rows;
       expect(courses).toEqual([
-        { name: "Original outline", status: "ready", source_version: 0, outline_version: 0 },
-        { name: "Unprocessed notes", status: "pending", source_version: 0, outline_version: -1 },
+        {
+          name: "Original outline",
+          status: "ready",
+          source_version: 0,
+          outline_version: 0,
+        },
+        {
+          name: "Unprocessed notes",
+          status: "pending",
+          source_version: 0,
+          outline_version: -1,
+        },
       ]);
-      expect((await pg.query("SELECT title FROM lessons")).rows).toEqual([{ title: "Original lesson" }]);
-      expect((await pg.query("SELECT content, embedding FROM material_chunks")).rows).toEqual([{ content: "Private source", embedding: [1, 2, 3] }]);
-      expect((await pg.query("SELECT blob_pathname FROM materials WHERE course_id IS NOT NULL ORDER BY blob_pathname")).rows).toEqual([{ blob_pathname: "a" }, { blob_pathname: "b" }]);
+      expect((await pg.query("SELECT title FROM lessons")).rows).toEqual([
+        { title: "Original lesson" },
+      ]);
+      expect(
+        (await pg.query("SELECT content, embedding FROM material_chunks")).rows,
+      ).toEqual([{ content: "Private source", embedding: [1, 2, 3] }]);
+      expect(
+        (
+          await pg.query(
+            "SELECT blob_pathname FROM materials WHERE course_id IS NOT NULL ORDER BY blob_pathname",
+          )
+        ).rows,
+      ).toEqual([{ blob_pathname: "a" }, { blob_pathname: "b" }]);
       await pg.exec("DELETE FROM materials WHERE blob_pathname = 'a'");
-      expect((await pg.query("SELECT name, source_version FROM courses WHERE name = 'Original outline'")).rows).toEqual([{ name: "Original outline", source_version: 1 }]);
-      expect((await pg.query("SELECT title FROM lessons")).rows).toHaveLength(1);
-    } finally { await pg.close(); }
+      expect(
+        (
+          await pg.query(
+            "SELECT name, source_version FROM courses WHERE name = 'Original outline'",
+          )
+        ).rows,
+      ).toEqual([{ name: "Original outline", source_version: 1 }]);
+      expect((await pg.query("SELECT title FROM lessons")).rows).toHaveLength(
+        1,
+      );
+    } finally {
+      await pg.close();
+    }
   }, 30_000);
 });

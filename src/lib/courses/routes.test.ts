@@ -1,17 +1,29 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ user: vi.fn(), process: vi.fn(), ensure: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  user: vi.fn(),
+  process: vi.fn(),
+  ensure: vi.fn(),
+}));
 vi.mock("@/lib/usage/rate-limit", () => ({ enforceAiRateLimit: vi.fn() }));
 vi.mock("@/lib/auth/dal", () => ({ requireUser: mocks.user }));
-vi.mock("@/lib/materials/processing", () => ({ processMaterial: mocks.process, MaterialProcessingError: class extends Error {} }));
-vi.mock("@/lib/courses/service", () => ({ ensureCourseOutline: mocks.ensure, CourseGenerationError: class extends Error {} }));
+vi.mock("@/lib/materials/processing", () => ({
+  processMaterial: mocks.process,
+  MaterialProcessingError: class extends Error {},
+}));
+vi.mock("@/lib/courses/service", () => ({
+  ensureCourseOutline: mocks.ensure,
+  CourseGenerationError: class extends Error {},
+}));
 
 import { POST as processPost } from "@/app/api/materials/[id]/process/route";
 import { POST as coursePost } from "@/app/api/courses/[id]/outline/route";
 
 const materialId = "aca9b80d-e56a-4728-b399-c416806b5069";
 const context = { params: Promise.resolve({ id: materialId }) };
-const request = new Request("http://localhost/api/materials", { method: "POST" });
+const request = new Request("http://localhost/api/materials", {
+  method: "POST",
+});
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -24,7 +36,10 @@ describe("course generation routes", () => {
     const result = await processPost(request, context);
     expect(result.status).toBe(200);
     expect(await result.json()).toEqual({ ok: true });
-    expect(mocks.process).toHaveBeenCalledExactlyOnceWith(materialId, "learner-a");
+    expect(mocks.process).toHaveBeenCalledExactlyOnceWith(
+      materialId,
+      "learner-a",
+    );
     expect(mocks.ensure).not.toHaveBeenCalled();
   });
 
@@ -39,7 +54,10 @@ describe("course generation routes", () => {
   it("generates explicitly using the authenticated owner", async () => {
     const result = await coursePost(request, context);
     expect(result.status).toBe(200);
-    expect(mocks.ensure).toHaveBeenCalledExactlyOnceWith(materialId, "learner-a");
+    expect(mocks.ensure).toHaveBeenCalledExactlyOnceWith(
+      materialId,
+      "learner-a",
+    );
     expect(mocks.process).not.toHaveBeenCalled();
   });
 
@@ -51,7 +69,9 @@ describe("course generation routes", () => {
   });
 
   it("rejects malformed IDs before database or provider work", async () => {
-    const result = await coursePost(request, { params: Promise.resolve({ id: "bad" }) });
+    const result = await coursePost(request, {
+      params: Promise.resolve({ id: "bad" }),
+    });
     expect(result.status).toBe(400);
     expect(mocks.ensure).not.toHaveBeenCalled();
   });

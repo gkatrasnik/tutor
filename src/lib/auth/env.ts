@@ -9,7 +9,9 @@ export function parseAuthEnv(input: Record<string, string | undefined>) {
   const result = authEnvSchema.safeParse(input);
 
   if (!result.success) {
-    throw new Error(`Invalid Neon Auth configuration:\n${z.prettifyError(result.error)}`);
+    throw new Error(
+      `Invalid Neon Auth configuration:\n${z.prettifyError(result.error)}`,
+    );
   }
 
   return result.data;

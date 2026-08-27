@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, BookOpen, Library } from "lucide-react";
+import { BarChart3, BookOpen, Library, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -12,13 +12,25 @@ const navigation = [
   { href: "/app/usage", label: "Usage", icon: BarChart3 },
 ];
 
-export function AppNavigation({ mobile = false }: { mobile?: boolean }) {
+export function AppNavigation({
+  mobile = false,
+  showAdmin = false,
+}: {
+  mobile?: boolean;
+  showAdmin?: boolean;
+}) {
   const pathname = usePathname();
+  const items = showAdmin
+    ? [...navigation, { href: "/admin", label: "Admin", icon: ShieldCheck }]
+    : navigation;
 
-  return navigation.map((item) => {
-    const active = item.href === "/app"
-      ? pathname === item.href || pathname.startsWith("/app/courses/") || pathname.startsWith("/app/sessions/")
-      : pathname.startsWith(item.href);
+  return items.map((item) => {
+    const active =
+      item.href === "/app"
+        ? pathname === item.href ||
+          pathname.startsWith("/app/courses/") ||
+          pathname.startsWith("/app/sessions/")
+        : pathname.startsWith(item.href);
     return (
       <Link
         key={item.href}

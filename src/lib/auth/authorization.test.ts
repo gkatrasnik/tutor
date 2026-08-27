@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { isAdminEmail, normalizeEmail, parseAdminEmails } from "./authorization";
+import {
+  isAdminEmail,
+  normalizeEmail,
+  parseAdminEmails,
+} from "./authorization";
 
 describe("admin authorization", () => {
   it("normalizes email casing and surrounding whitespace", () => {

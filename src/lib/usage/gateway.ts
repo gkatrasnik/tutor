@@ -29,29 +29,62 @@ function mergeKnownMetrics(current: Metrics, result: unknown): Metrics {
     reasoningTokens: next.reasoningTokens ?? current.reasoningTokens,
     totalTokens: next.totalTokens ?? current.totalTokens,
     costUsd: next.costUsd ?? current.costUsd,
-    gatewayGenerationId: next.gatewayGenerationId ?? current.gatewayGenerationId,
+    gatewayGenerationId:
+      next.gatewayGenerationId ?? current.gatewayGenerationId,
   };
 }
 
-export async function recordGateway<T>({ context, feature, model, run }: RecordGatewayOptions<T>): Promise<T> {
-  if (!process.env.AI_GATEWAY_API_KEY?.trim()) throw new Error("A dedicated AI_GATEWAY_API_KEY is required for budget-controlled AI requests.");
+export async function recordGateway<T>({
+  context,
+  feature,
+  model,
+  run,
+}: RecordGatewayOptions<T>): Promise<T> {
+  if (!process.env.AI_GATEWAY_API_KEY?.trim())
+    throw new Error(
+      "A dedicated AI_GATEWAY_API_KEY is required for budget-controlled AI requests.",
+    );
   const id = crypto.randomUUID();
   // Fail closed before AI spend if the durable pending record cannot be created.
-  await db.insert(aiUsageEvents).values({ id, ownerId: context.ownerId, requestId: context.requestId, feature, model });
+  await db.insert(aiUsageEvents).values({
+    id,
+    ownerId: context.ownerId,
+    requestId: context.requestId,
+    feature,
+    model,
+  });
   let operationStartedAt = performance.now();
   let timeToFirstTokenMs: number | null = null;
   let metrics = usageMetrics(undefined);
   const recorder: GatewayUsageRecorder = {
-    recordMetrics: (result) => { metrics = mergeKnownMetrics(metrics, result); },
+    recordMetrics: (result) => {
+      metrics = mergeKnownMetrics(metrics, result);
+    },
     markFirstToken: () => {
       timeToFirstTokenMs ??= Math.round(performance.now() - operationStartedAt);
     },
   };
-  async function finalizeUsageEvent(status: "success" | "failure", errorCode: string | null) {
+  async function finalizeUsageEvent(
+    status: "success" | "failure",
+    errorCode: string | null,
+  ) {
     try {
-      await db.update(aiUsageEvents).set({ ...metrics, status, errorCode,
-        latencyMs: Math.round(performance.now() - operationStartedAt), timeToFirstTokenMs })
-        .where(and(eq(aiUsageEvents.id, id), eq(aiUsageEvents.ownerId, context.ownerId), eq(aiUsageEvents.status, "pending")));
+      await db
+        .update(aiUsageEvents)
+        .set({
+          ...metrics,
+          status,
+          errorCode,
+          latencyMs: Math.round(performance.now() - operationStartedAt),
+          timeToFirstTokenMs,
+        })
+        .where(
+          and(
+            eq(aiUsageEvents.id, id),
+            eq(aiUsageEvents.ownerId, context.ownerId),
+            eq(aiUsageEvents.status, "pending"),
+          ),
+        );
     } catch {
       // Preserve the pending event for reconciliation. Never retry billable work
       // because accounting completion failed, or log prompts/provider responses.
@@ -59,7 +92,8 @@ export async function recordGateway<T>({ context, feature, model, run }: RecordG
     }
   }
   try {
-    if (context.reservationId) await markQuotaStarted(context.reservationId, context.ownerId);
+    if (context.reservationId)
+      await markQuotaStarted(context.reservationId, context.ownerId);
     operationStartedAt = performance.now();
     const result = await run(recorder);
     await finalizeUsageEvent("success", null);

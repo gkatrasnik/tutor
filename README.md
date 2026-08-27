@@ -2,7 +2,7 @@
 
 Tutor turns a learner's private PDF or pasted text into a focused course and a grounded, Socratic tutoring experience.
 
-This repository currently contains **Iterations 1–9: Foundation, Neon database discipline, magic-link authentication, private material uploads, OpenAI-backed retrieval, structured course outlines, persistent Socratic tutoring, assessment/progress, and usage accounting/rate limits** from the implementation plan. Learner/admin analytics pages remain Iteration 10.
+This repository currently contains **Iterations 1–10: Foundation, Neon database discipline, magic-link authentication, private material uploads, OpenAI-backed retrieval, structured course outlines, persistent Socratic tutoring, assessment/progress, usage accounting/rate limits, and learner/admin analytics** from the implementation plan. Production hardening remains Iteration 11.
 
 ## Start locally
 
@@ -79,7 +79,8 @@ src/app/
 ├── (authenticated)/app/            → /app
 │   ├── materials/                   → /app/materials
 │   ├── courses/[id]/                → /app/courses/:id
-│   └── sessions/[id]/               → /app/sessions/:id
+│   ├── sessions/[id]/               → /app/sessions/:id
+│   └── usage/                        → /app/usage
 ├── (admin)/admin/                   → /admin
 ├── globals.css
 └── layout.tsx
@@ -257,16 +258,18 @@ Daily counters and reservation rows are created atomically before work begins. I
 
 The database rolling limiter uses one bounded timestamp array per authenticated user and an atomic upsert, so concurrent requests and separate server instances cannot each spend the same slot. It always applies, including on localhost. Rate-limit responses include `Retry-After` and never trust a user-ID header or body field.
 
+`AI_REQUESTS_PER_MINUTE` in `src/lib/usage/contracts.ts` configures **only this database limiter**. It does not create, update, or configure a Vercel Firewall rule. The Firewall request limit and time window are separate deployment settings and must be changed manually in the Vercel dashboard. Keep both limits aligned unless a deliberate stricter outer limit is wanted; a production request must pass both, so whichever limiter rejects first is the effective limit. The database uses an exact rolling 60-second window, while Vercel's non-Enterprise fixed-window rule can reset at a window boundary.
+
 ### Vercel Firewall setup (manual)
 
 The SDK integration is implemented, but **installing the package does not publish a Firewall rule**. Following [Vercel's Rate Limiting SDK setup](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting-sdk):
 
 1. Open the project's **Firewall → Configure → New Rule**. Select the **`@vercel/firewall`** condition with rate-limit ID `tutor-ai`.
 2. Set its rate limit to **5 requests per 60 seconds**, with rate-limited requests denied. Review and publish the rule. Check feature availability/pricing for your Vercel plan before enabling it; this implementation does not upgrade the account.
-3. Set `VERCEL_FIREWALL_RATE_LIMIT_ID=tutor-ai` in the matching Vercel deployment environments, then redeploy. The server supplies the authenticated user ID as `rateLimitKey`; don't add a client-controlled user header condition.
+3. Set `VERCEL_FIREWALL_RATE_LIMIT_ID=tutor-ai` in the matching Vercel deployment environments, then redeploy. This variable only selects the published rule by ID; it does **not** copy `AI_REQUESTS_PER_MINUTE` or any other limit into Vercel. The server supplies the authenticated user ID as `rateLimitKey`; don't add a client-controlled user header condition.
 4. For Preview, follow Vercel's Protection Bypass for Automation/system-environment-variable requirements. Test the published rule in Preview before Production. Leave the setting empty locally; the database guard still enforces the rolling limit.
 
-When configured in production, a missing/unreachable rule fails closed with 503; a rate-limited request receives 429. The SDK uses the configured deployment host and sanitized headers. The database check remains active too, providing exact rolling-window enforcement independent of the Firewall's configured algorithm.
+When configured in production, a missing/unreachable rule fails closed with 503; a rate-limited request receives 429. The SDK prefers the trusted public application domain because generated deployment URLs can be inaccessible under Deployment Protection, and it logs a safe configuration error without user or request data when the check fails. The database check remains active too, providing exact rolling-window enforcement independent of the Firewall's configured algorithm.
 
 ### Checkpoint and smoke test
 
@@ -274,4 +277,12 @@ Trace a tutor request through the authenticated Route Handler, shared rolling li
 
 After applying the migration, send one normal tutor message and inspect its two `ai_usage_events` rows in Neon/Drizzle Studio. Reconcile their model, generation ID, token counts, and reported USD cost with the Gateway dashboard; do not treat missing metadata as zero. Then use the mocked automated tests to reproduce 429s without spending credits. Test real Firewall rejection in Preview after publishing the rule. No live AI calls or production Firewall changes are part of automated tests.
 
-The learner `/app/usage` and read-only admin analytics views are the **next iteration**. For a small learning exercise, add a quota test showing that releasing an already-started ingestion cannot restore its daily allowance.
+## Learner and admin analytics (Iteration 10)
+
+No migration is required for this iteration. Both views read the Iteration 9 ledger and daily counters directly in dynamic Server Components; there is no public analytics API and no paid Custom Reporting API dependency.
+
+Learners can open `/app/usage` to see only their own request timestamp, feature, status, token counts, total latency, time to first token, and remaining tutor/ingestion quotas for the current UTC day. The learner query deliberately does not select model IDs, Gateway generation IDs, safe error codes, or monetary cost. Request history is paginated and explains that one learner action can produce separate retrieval and generation events.
+
+Allowlisted administrators can open `/admin` for a read-only, date-filtered view containing aggregate requests, tokens, average latency, failures, and actual known USD cost; breakdowns by UTC day, user, model, and feature; highest-usage learners; recent safe failure categories; and paginated per-request metadata. Every admin analytics query enters through `getAdminAnalytics`, which executes `requireAdmin()` before any database read. Unknown provider costs remain visibly distinct from a reported zero, and all aggregates come from locally persisted Gateway metadata for reconciliation with the Gateway dashboard.
+
+Both pages include loading, empty, narrow-screen table overflow, status, and pagination states. The next iteration is production hardening and the final end-to-end release pass. For a small learning exercise, add an analytics test that verifies a second learner can never appear in `/app/usage` results.

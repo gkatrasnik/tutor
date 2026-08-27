@@ -5,17 +5,24 @@ export const COURSE_ATTEMPT_TIMEOUT_MS = 45_000;
 export const COURSE_LEASE_MS = 5 * 60_000;
 export const MAX_COURSE_CHUNKS = 300;
 export const MAX_COURSE_SOURCE_CHARACTERS = 200_000;
-export const createCourseSchema = z.object({ name: z.string().trim().min(1, "Give your course a name.").max(160) });
+export const createCourseSchema = z.object({
+  name: z.string().trim().min(1, "Give your course a name.").max(160),
+});
 
 export const courseOutlineSchema = z.object({
   title: z.string().trim().min(1).max(160),
   summary: z.string().trim().min(1).max(800),
-  lessons: z.array(z.object({
-    title: z.string().trim().min(1).max(120),
-    objective: z.string().trim().min(1).max(300),
-    concepts: z.array(z.string().trim().min(1).max(80)).min(1).max(6),
-    retrievalQuery: z.string().trim().min(1).max(500),
-  })).min(4).max(8),
+  lessons: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(120),
+        objective: z.string().trim().min(1).max(300),
+        concepts: z.array(z.string().trim().min(1).max(80)).min(1).max(6),
+        retrievalQuery: z.string().trim().min(1).max(500),
+      }),
+    )
+    .min(4)
+    .max(8),
 });
 
 export type CourseOutline = z.infer<typeof courseOutlineSchema>;

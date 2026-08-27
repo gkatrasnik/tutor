@@ -13,7 +13,9 @@ export const metadata: Metadata = {
     "Turn private reading material into a focused course with a grounded, Socratic AI tutor.",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className="h-full antialiased">
       <body className="flex min-h-full flex-col">

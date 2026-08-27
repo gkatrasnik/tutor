@@ -14,12 +14,32 @@ it("adds accounting without resetting prior tutor usage or changing source data"
         VALUES ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000001','owner','text','Notes','private','private',50,'ready');
       INSERT INTO material_chunks(material_id,owner_id,ordinal,content,token_count,embedding,embedding_model)
         VALUES ('00000000-0000-4000-8000-000000000002','owner',0,'Source',1,'{1,2,3}','openai/text-embedding-3-small');`);
-    const tables = ["courses", "materials", "material_chunks", "lessons", "tutor_sessions", "messages", "lesson_assessments"];
-    const before = await Promise.all(tables.map(async (table) => (await pg.query(`SELECT * FROM ${table}`)).rows));
+    const tables = [
+      "courses",
+      "materials",
+      "material_chunks",
+      "lessons",
+      "tutor_sessions",
+      "messages",
+      "lesson_assessments",
+    ];
+    const before = await Promise.all(
+      tables.map(
+        async (table) => (await pg.query(`SELECT * FROM ${table}`)).rows,
+      ),
+    );
     await pg.exec(migrationSql("0008_usage_accounting.sql"));
-    const after = await Promise.all(tables.map(async (table) => (await pg.query(`SELECT * FROM ${table}`)).rows));
+    const after = await Promise.all(
+      tables.map(
+        async (table) => (await pg.query(`SELECT * FROM ${table}`)).rows,
+      ),
+    );
     expect(after).toEqual(before);
-    expect((await pg.query("SELECT * FROM tutor_daily_usage")).rows).toEqual([{ owner_id: "owner", day: "2026-08-26", turns: 17, ingestions: 0 }]);
+    expect((await pg.query("SELECT * FROM tutor_daily_usage")).rows).toEqual([
+      { owner_id: "owner", day: "2026-08-26", turns: 17, ingestions: 0 },
+    ]);
     expect((await pg.query("SELECT * FROM ai_usage_events")).rows).toEqual([]);
-  } finally { await pg.close(); }
+  } finally {
+    await pg.close();
+  }
 }, 30_000);

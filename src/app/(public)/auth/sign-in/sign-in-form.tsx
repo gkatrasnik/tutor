@@ -6,7 +6,12 @@ import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth/client";
 
@@ -29,13 +34,19 @@ export function SignInForm() {
       });
 
       if (result.error) {
-        throw new Error(result.error.message ?? "We could not send a sign-in link.");
+        throw new Error(
+          result.error.message ?? "We could not send a sign-in link.",
+        );
       }
 
       setMessage("Check your inbox. Your secure sign-in link is on its way.");
       toast.success("Magic link sent");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "We could not send a sign-in link.");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "We could not send a sign-in link.",
+      );
       toast.error("Sign-in request failed");
     } finally {
       setPending(false);
@@ -63,10 +74,18 @@ export function SignInForm() {
         <FieldDescription id="email-description">
           We will email you a single-use link. No password needed.
         </FieldDescription>
-        <FieldError id="email-error" errors={error ? [{ message: error }] : undefined} />
+        <FieldError
+          id="email-error"
+          errors={error ? [{ message: error }] : undefined}
+        />
       </Field>
 
-      <Button type="submit" size="lg" className="h-11 w-full" disabled={pending}>
+      <Button
+        type="submit"
+        size="lg"
+        className="h-11 w-full"
+        disabled={pending}
+      >
         {pending ? (
           <LoaderCircle className="animate-spin" aria-hidden="true" />
         ) : (

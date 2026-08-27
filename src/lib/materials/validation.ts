@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { MAX_PDF_BYTES, MAX_TEXT_CHARACTERS, materialUploadPrefix } from "./constants";
+import {
+  MAX_PDF_BYTES,
+  MAX_TEXT_CHARACTERS,
+  materialUploadPrefix,
+} from "./constants";
 
 export const registerPdfSchema = z.object({
   courseId: z.uuid(),
@@ -12,10 +16,14 @@ export const registerPdfSchema = z.object({
 export const createTextSchema = z.object({
   courseId: z.uuid(),
   title: z.string().trim().min(1, "Give your notes a title.").max(255),
-  text: z.string().trim().min(1, "Paste some text first.").max(
-    MAX_TEXT_CHARACTERS,
-    `Pasted text cannot exceed ${MAX_TEXT_CHARACTERS.toLocaleString()} characters.`,
-  ),
+  text: z
+    .string()
+    .trim()
+    .min(1, "Paste some text first.")
+    .max(
+      MAX_TEXT_CHARACTERS,
+      `Pasted text cannot exceed ${MAX_TEXT_CHARACTERS.toLocaleString()} characters.`,
+    ),
 });
 
 export function validateOwnedPdfBlob(

@@ -5,7 +5,10 @@ import { aiQuotaReservations, tutorDailyUsage } from "@/db/schema";
 import { TUTOR_DAILY_LIMIT } from "@/lib/tutor/contracts";
 import { AiLimitError, INGESTION_DAILY_LIMIT } from "./contracts";
 
-export async function reserveDailyQuota(ownerId: string, kind: "tutor" | "ingestion") {
+export async function reserveDailyQuota(
+  ownerId: string,
+  kind: "tutor" | "ingestion",
+) {
   const id = crypto.randomUUID();
   const column = kind === "tutor" ? sql`turns` : sql`ingestions`;
   const limit = kind === "tutor" ? TUTOR_DAILY_LIMIT : INGESTION_DAILY_LIMIT;
@@ -19,17 +22,37 @@ export async function reserveDailyQuota(ownerId: string, kind: "tutor" | "ingest
     insert into ${aiQuotaReservations} (id, owner_id, day, kind)
     select ${id}::uuid, ${ownerId}, day, ${kind}::quota_kind from reserved returning id
   `);
-  if (!result.rows.length) throw new AiLimitError(kind === "tutor"
-    ? "You have reached today's 30 tutor turns. Please return after midnight UTC."
-    : "You have reached today's 3 material ingestions. Please return after midnight UTC.", 429,
-  Math.ceil((Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1) - Date.now()) / 1000));
+  if (!result.rows.length)
+    throw new AiLimitError(
+      kind === "tutor"
+        ? "You have reached today's 30 tutor turns. Please return after midnight UTC."
+        : "You have reached today's 3 material ingestions. Please return after midnight UTC.",
+      429,
+      Math.ceil(
+        (Date.UTC(
+          new Date().getUTCFullYear(),
+          new Date().getUTCMonth(),
+          new Date().getUTCDate() + 1,
+        ) -
+          Date.now()) /
+          1000,
+      ),
+    );
   return id;
 }
 
 export async function markQuotaStarted(id: string, ownerId: string) {
-  const rows = await db.update(aiQuotaReservations).set({ state: "started" })
-    .where(and(eq(aiQuotaReservations.id, id), eq(aiQuotaReservations.ownerId, ownerId),
-      inArray(aiQuotaReservations.state, ["reserved", "started"]))).returning({ id: aiQuotaReservations.id });
+  const rows = await db
+    .update(aiQuotaReservations)
+    .set({ state: "started" })
+    .where(
+      and(
+        eq(aiQuotaReservations.id, id),
+        eq(aiQuotaReservations.ownerId, ownerId),
+        inArray(aiQuotaReservations.state, ["reserved", "started"]),
+      ),
+    )
+    .returning({ id: aiQuotaReservations.id });
   if (!rows.length) throw new Error("Quota reservation is unavailable.");
 }
 

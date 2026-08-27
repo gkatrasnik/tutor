@@ -13,7 +13,11 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { MAX_PDF_BYTES, MAX_TEXT_CHARACTERS, materialUploadPrefix } from "@/lib/materials/constants";
+import {
+  MAX_PDF_BYTES,
+  MAX_TEXT_CHARACTERS,
+  materialUploadPrefix,
+} from "@/lib/materials/constants";
 
 type ApiResult = { id?: string; error?: string };
 
@@ -23,7 +27,13 @@ async function parseResponse(response: Response) {
   return result;
 }
 
-export function MaterialUploader({ userId, courseId }: { userId: string; courseId: string }) {
+export function MaterialUploader({
+  userId,
+  courseId,
+}: {
+  userId: string;
+  courseId: string;
+}) {
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -33,9 +43,13 @@ export function MaterialUploader({ userId, courseId }: { userId: string; courseI
 
   async function finishMaterial(id: string) {
     setProgress(90);
-    await parseResponse(await fetch(`/api/materials/${id}/process`, { method: "POST" }));
+    await parseResponse(
+      await fetch(`/api/materials/${id}/process`, { method: "POST" }),
+    );
     setProgress(100);
-    toast.success("Material indexed. Add more sources or generate your course outline when ready.");
+    toast.success(
+      "Material indexed. Add more sources or generate your course outline when ready.",
+    );
     router.refresh();
   }
 
@@ -44,8 +58,10 @@ export function MaterialUploader({ userId, courseId }: { userId: string; courseI
     const formElement = event.currentTarget;
     const file = fileInput.current?.files?.[0];
     if (!file) return setError("Choose a PDF to upload.");
-    if (file.type !== "application/pdf") return setError("Only PDF files are supported.");
-    if (file.size > MAX_PDF_BYTES) return setError("PDF files must be no larger than 5 MB.");
+    if (file.type !== "application/pdf")
+      return setError("Only PDF files are supported.");
+    if (file.size > MAX_PDF_BYTES)
+      return setError("PDF files must be no larger than 5 MB.");
 
     setBusy(true);
     setError(null);
@@ -57,20 +73,23 @@ export function MaterialUploader({ userId, courseId }: { userId: string; courseI
         handleUploadUrl: "/api/materials/upload",
         contentType: "application/pdf",
         clientPayload: JSON.stringify({ courseId }),
-        onUploadProgress: ({ percentage }) => setProgress(Math.max(5, Math.round(percentage * 0.75))),
+        onUploadProgress: ({ percentage }) =>
+          setProgress(Math.max(5, Math.round(percentage * 0.75))),
       });
       setProgress(80);
-      const registered = await parseResponse(await fetch("/api/materials", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          sourceType: "pdf",
-          courseId,
-          url: blob.url,
-          pathname: blob.pathname,
-          originalFilename: file.name,
+      const registered = await parseResponse(
+        await fetch("/api/materials", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sourceType: "pdf",
+            courseId,
+            url: blob.url,
+            pathname: blob.pathname,
+            originalFilename: file.name,
+          }),
         }),
-      }));
+      );
       if (!registered.id) throw new Error("The material could not be created.");
       await finishMaterial(registered.id);
       formElement.reset();
@@ -92,18 +111,24 @@ export function MaterialUploader({ userId, courseId }: { userId: string; courseI
     setError(null);
     setProgress(25);
     try {
-      const created = await parseResponse(await fetch("/api/materials", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ sourceType: "text", courseId, title, text }),
-      }));
+      const created = await parseResponse(
+        await fetch("/api/materials", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sourceType: "text", courseId, title, text }),
+        }),
+      );
       if (!created.id) throw new Error("The material could not be created.");
       setProgress(75);
       await finishMaterial(created.id);
       formElement.reset();
       setCharacterCount(0);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The text could not be saved.");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "The text could not be saved.",
+      );
       router.refresh();
     } finally {
       setBusy(false);
@@ -120,18 +145,35 @@ export function MaterialUploader({ userId, courseId }: { userId: string; courseI
       ) : null}
       <Tabs defaultValue="pdf">
         <TabsList className="grid w-full grid-cols-2 sm:w-80">
-          <TabsTrigger value="pdf"><FileUp aria-hidden="true" /> Upload PDF</TabsTrigger>
-          <TabsTrigger value="text"><FileText aria-hidden="true" /> Paste text</TabsTrigger>
+          <TabsTrigger value="pdf">
+            <FileUp aria-hidden="true" /> Upload PDF
+          </TabsTrigger>
+          <TabsTrigger value="text">
+            <FileText aria-hidden="true" /> Paste text
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="pdf" className="pt-5">
           <form onSubmit={handlePdf} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="material-pdf">PDF document</Label>
-              <Input ref={fileInput} id="material-pdf" type="file" accept="application/pdf,.pdf" disabled={busy} />
-              <p className="text-xs text-stone-500">Up to 5 MB and 50 pages. Scanned image-only PDFs are not supported yet.</p>
+              <Input
+                ref={fileInput}
+                id="material-pdf"
+                type="file"
+                accept="application/pdf,.pdf"
+                disabled={busy}
+              />
+              <p className="text-xs text-stone-500">
+                Up to 5 MB and 50 pages. Scanned image-only PDFs are not
+                supported yet.
+              </p>
             </div>
             <Button type="submit" disabled={busy}>
-              {busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <FileUp aria-hidden="true" />}
+              {busy ? (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              ) : (
+                <FileUp aria-hidden="true" />
+              )}
               Upload and prepare
             </Button>
           </form>
@@ -140,17 +182,41 @@ export function MaterialUploader({ userId, courseId }: { userId: string; courseI
           <form onSubmit={handleText} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="material-title">Title</Label>
-              <Input id="material-title" name="title" placeholder="e.g. Biology lecture notes" maxLength={255} disabled={busy} required />
+              <Input
+                id="material-title"
+                name="title"
+                placeholder="e.g. Biology lecture notes"
+                maxLength={255}
+                disabled={busy}
+                required
+              />
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="material-text">Your text</Label>
-                <span className="text-xs tabular-nums text-stone-500">{characterCount.toLocaleString()} / {MAX_TEXT_CHARACTERS.toLocaleString()}</span>
+                <span className="text-xs tabular-nums text-stone-500">
+                  {characterCount.toLocaleString()} /{" "}
+                  {MAX_TEXT_CHARACTERS.toLocaleString()}
+                </span>
               </div>
-              <Textarea id="material-text" name="text" className="min-h-48 resize-y" maxLength={MAX_TEXT_CHARACTERS} onChange={(event) => setCharacterCount(event.target.value.length)} disabled={busy} required />
+              <Textarea
+                id="material-text"
+                name="text"
+                className="min-h-48 resize-y"
+                maxLength={MAX_TEXT_CHARACTERS}
+                onChange={(event) =>
+                  setCharacterCount(event.target.value.length)
+                }
+                disabled={busy}
+                required
+              />
             </div>
             <Button type="submit" disabled={busy}>
-              {busy ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <FileText aria-hidden="true" />}
+              {busy ? (
+                <LoaderCircle className="animate-spin" aria-hidden="true" />
+              ) : (
+                <FileText aria-hidden="true" />
+              )}
               Save and prepare
             </Button>
           </form>
@@ -158,8 +224,19 @@ export function MaterialUploader({ userId, courseId }: { userId: string; courseI
       </Tabs>
       {busy ? (
         <div className="mt-5 space-y-2" aria-live="polite">
-          <div className="flex justify-between text-xs text-stone-500"><span>{progress >= 90 ? "Indexing your material…" : "Preparing your material…"}</span><span>{progress}%</span></div>
-          {progress >= 90 ? <p className="text-xs text-stone-500">This can take a few minutes. Keep this page open.</p> : null}
+          <div className="flex justify-between text-xs text-stone-500">
+            <span>
+              {progress >= 90
+                ? "Indexing your material…"
+                : "Preparing your material…"}
+            </span>
+            <span>{progress}%</span>
+          </div>
+          {progress >= 90 ? (
+            <p className="text-xs text-stone-500">
+              This can take a few minutes. Keep this page open.
+            </p>
+          ) : null}
           <Progress value={progress} />
         </div>
       ) : null}

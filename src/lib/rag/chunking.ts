@@ -47,8 +47,13 @@ function chunkPage(page: SourcePage): Omit<ChunkDraft, "ordinal">[] {
       end += 1;
     }
 
-    const content = units.slice(start, end).map((unit) => unit.content).join("").trim();
-    if (content) chunks.push({ pageNumber: page.pageNumber, content, tokenCount });
+    const content = units
+      .slice(start, end)
+      .map((unit) => unit.content)
+      .join("")
+      .trim();
+    if (content)
+      chunks.push({ pageNumber: page.pageNumber, content, tokenCount });
     if (end >= units.length) break;
 
     let nextStart = end;
@@ -64,7 +69,9 @@ function chunkPage(page: SourcePage): Omit<ChunkDraft, "ordinal">[] {
 }
 
 export function chunkMaterialPages(pages: SourcePage[]): ChunkDraft[] {
-  const chunks = pages.flatMap(chunkPage).map((chunk, ordinal) => ({ ...chunk, ordinal }));
+  const chunks = pages
+    .flatMap(chunkPage)
+    .map((chunk, ordinal) => ({ ...chunk, ordinal }));
 
   if (chunks.length > MAX_CHUNKS_PER_MATERIAL) {
     throw new MaterialChunkLimitError(

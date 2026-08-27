@@ -3,19 +3,36 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const vectorMigration = readFileSync(resolve("drizzle/0000_enable_vector.sql"), "utf8");
-const schemaMigration = readFileSync(resolve("drizzle/0001_initial_schema.sql"), "utf8");
-const courseMigration = readFileSync(resolve("drizzle/0003_course_outlines.sql"), "utf8");
+const vectorMigration = readFileSync(
+  resolve("drizzle/0000_enable_vector.sql"),
+  "utf8",
+);
+const schemaMigration = readFileSync(
+  resolve("drizzle/0001_initial_schema.sql"),
+  "utf8",
+);
+const courseMigration = readFileSync(
+  resolve("drizzle/0003_course_outlines.sql"),
+  "utf8",
+);
 
 describe("database migrations", () => {
   it("records the original one-material outline constraints before the course-first migration", () => {
-    expect(courseMigration).toContain('CREATE UNIQUE INDEX "courses_material_unique" ON "courses" USING btree ("material_id")');
-    expect(courseMigration).toContain('CREATE UNIQUE INDEX "lessons_course_ordinal_unique" ON "lessons" USING btree ("course_id","ordinal")');
+    expect(courseMigration).toContain(
+      'CREATE UNIQUE INDEX "courses_material_unique" ON "courses" USING btree ("material_id")',
+    );
+    expect(courseMigration).toContain(
+      'CREATE UNIQUE INDEX "lessons_course_ordinal_unique" ON "lessons" USING btree ("course_id","ordinal")',
+    );
   });
 
   it("records the original cascade before the course-first migration reverses ownership", () => {
-    expect(courseMigration).toContain('FOREIGN KEY ("material_id") REFERENCES "public"."materials"("id") ON DELETE cascade');
-    expect(courseMigration).toContain('FOREIGN KEY ("course_id") REFERENCES "public"."courses"("id") ON DELETE cascade');
+    expect(courseMigration).toContain(
+      'FOREIGN KEY ("material_id") REFERENCES "public"."materials"("id") ON DELETE cascade',
+    );
+    expect(courseMigration).toContain(
+      'FOREIGN KEY ("course_id") REFERENCES "public"."courses"("id") ON DELETE cascade',
+    );
   });
 
   it("enables pgvector before creating vector-backed tables", () => {

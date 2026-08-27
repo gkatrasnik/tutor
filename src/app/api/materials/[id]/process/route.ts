@@ -1,7 +1,10 @@
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth/dal";
-import { MaterialProcessingError, processMaterial } from "@/lib/materials/processing";
+import {
+  MaterialProcessingError,
+  processMaterial,
+} from "@/lib/materials/processing";
 import { enforceAiRateLimit } from "@/lib/usage/rate-limit";
 import { aiLimitResponse } from "@/lib/usage/contracts";
 
@@ -15,7 +18,8 @@ export async function POST(
 ) {
   const user = await requireUser();
   const parsed = idSchema.safeParse((await context.params).id);
-  if (!parsed.success) return Response.json({ error: "Invalid material ID." }, { status: 400 });
+  if (!parsed.success)
+    return Response.json({ error: "Invalid material ID." }, { status: 400 });
 
   try {
     await enforceAiRateLimit(user.id, request);
@@ -23,7 +27,10 @@ export async function POST(
   } catch (error) {
     const limited = aiLimitResponse(error);
     if (limited) return limited;
-    const message = error instanceof MaterialProcessingError ? error.message : "Material processing failed.";
+    const message =
+      error instanceof MaterialProcessingError
+        ? error.message
+        : "Material processing failed.";
     return Response.json({ error: message }, { status: 422 });
   }
 

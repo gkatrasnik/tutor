@@ -14,9 +14,14 @@ export const assessmentResultSchema = z.object({
 });
 export type AssessmentResult = z.infer<typeof assessmentResultSchema>;
 export type AssessmentSummary = {
-  id: string; status: "pending" | "complete" | "failed";
-  score: number | null; strengths: string[]; gaps: string[]; nextStep: string | null;
-  error: string | null; createdAt: string;
+  id: string;
+  status: "pending" | "complete" | "failed";
+  score: number | null;
+  strengths: string[];
+  gaps: string[];
+  nextStep: string | null;
+  error: string | null;
+  createdAt: string;
 };
 export type AssessmentEvidence = {
   lesson: { title: string; objective: string };
@@ -36,5 +41,9 @@ export function buildAssessmentPrompt(evidence: AssessmentEvidence) {
 }
 
 export function courseProgress(total: number, completed: number) {
-  return { total, completed, percent: total === 0 ? 0 : Math.round(completed / total * 100) };
+  return {
+    total,
+    completed,
+    percent: total === 0 ? 0 : Math.round((completed / total) * 100),
+  };
 }

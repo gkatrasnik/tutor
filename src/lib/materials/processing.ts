@@ -9,7 +9,11 @@ import { db } from "@/db";
 import { materialChunks, materials } from "@/db/schema";
 import { env } from "@/lib/env";
 import { releaseUnusedQuota, reserveDailyQuota } from "@/lib/usage/quotas";
-import { chunkMaterialPages, MaterialChunkLimitError, type SourcePage } from "@/lib/rag/chunking";
+import {
+  chunkMaterialPages,
+  MaterialChunkLimitError,
+  type SourcePage,
+} from "@/lib/rag/chunking";
 import { EmbeddingError, embedDocuments } from "@/lib/rag/embeddings";
 
 import { MAX_PDF_PAGES, MAX_TEXT_CHARACTERS } from "./constants";
@@ -20,28 +24,43 @@ export class MaterialProcessingError extends Error {}
 async function readPrivateBlob(pathname: string) {
   const result = await get(pathname, { access: "private" });
   if (!result || result.statusCode !== 200) {
-    throw new MaterialProcessingError("The uploaded file could not be read. Please upload it again.");
+    throw new MaterialProcessingError(
+      "The uploaded file could not be read. Please upload it again.",
+    );
   }
   return new Uint8Array(await new Response(result.stream).arrayBuffer());
 }
 
 function safeProcessingMessage(error: unknown) {
   if (error instanceof MaterialProcessingError) return error.message;
-  if (error instanceof MaterialChunkLimitError || error instanceof EmbeddingError) return error.message;
+  if (
+    error instanceof MaterialChunkLimitError ||
+    error instanceof EmbeddingError
+  )
+    return error.message;
   return "We could not read this file. It may be encrypted or malformed.";
 }
 
 const CHUNK_INSERT_BATCH_SIZE = 25;
 
 export async function processMaterial(materialId: string, ownerId: string) {
-  const [material] = await db.select().from(materials)
-    .where(and(eq(materials.id, materialId), eq(materials.ownerId, ownerId))).limit(1);
+  const [material] = await db
+    .select()
+    .from(materials)
+    .where(and(eq(materials.id, materialId), eq(materials.ownerId, ownerId)))
+    .limit(1);
 
   if (!material) throw new MaterialProcessingError("Material not found.");
 
   const reservationId = await reserveDailyQuota(ownerId, "ingestion");
   try {
-    await db.update(materials).set({ status: "processing", processingError: null, updatedAt: new Date() })
+    await db
+      .update(materials)
+      .set({
+        status: "processing",
+        processingError: null,
+        updatedAt: new Date(),
+      })
       .where(and(eq(materials.id, materialId), eq(materials.ownerId, ownerId)));
     const bytes = await readPrivateBlob(material.blobPathname);
     let text: string;
@@ -55,12 +74,16 @@ export async function processMaterial(materialId: string, ownerId: string) {
       try {
         document = await getDocumentProxy(bytes);
       } catch {
-        throw new MaterialProcessingError("This PDF is encrypted or malformed and cannot be read.");
+        throw new MaterialProcessingError(
+          "This PDF is encrypted or malformed and cannot be read.",
+        );
       }
 
       pageCount = document.numPages;
       if (pageCount > MAX_PDF_PAGES) {
-        throw new MaterialProcessingError(`PDFs are limited to ${MAX_PDF_PAGES} pages.`);
+        throw new MaterialProcessingError(
+          `PDFs are limited to ${MAX_PDF_PAGES} pages.`,
+        );
       }
 
       const extracted = await extractText(document, { mergePages: false });
@@ -68,10 +91,14 @@ export async function processMaterial(materialId: string, ownerId: string) {
         pageNumber: index + 1,
         text: normalizeExtractedText(pageText),
       }));
-      text = normalizeExtractedText(sourcePages.map((page) => page.text).join("\n\n"));
+      text = normalizeExtractedText(
+        sourcePages.map((page) => page.text).join("\n\n"),
+      );
 
       if (!text) {
-        throw new MaterialProcessingError("No readable text was found. Image-only scans are not supported yet.");
+        throw new MaterialProcessingError(
+          "No readable text was found. Image-only scans are not supported yet.",
+        );
       }
       if (text.length > MAX_TEXT_CHARACTERS) {
         throw new MaterialProcessingError(
@@ -82,7 +109,11 @@ export async function processMaterial(materialId: string, ownerId: string) {
       const extractedBlob = await put(
         `materials/${encodeURIComponent(ownerId)}/extracted/${material.id}.txt`,
         text,
-        { access: "private", contentType: "text/plain; charset=utf-8", allowOverwrite: true },
+        {
+          access: "private",
+          contentType: "text/plain; charset=utf-8",
+          allowOverwrite: true,
+        },
       );
       extractedTextBlobUrl = extractedBlob.url;
       extractedTextBlobPathname = extractedBlob.pathname;
@@ -93,41 +124,63 @@ export async function processMaterial(materialId: string, ownerId: string) {
     }
 
     const chunks = chunkMaterialPages(sourcePages);
-    const embeddings = await embedDocuments(chunks.map((chunk) => chunk.content), { ownerId, requestId: reservationId, reservationId });
+    const embeddings = await embedDocuments(
+      chunks.map((chunk) => chunk.content),
+      { ownerId, requestId: reservationId, reservationId },
+    );
 
     try {
       // Neon HTTP cannot run interactive transaction callbacks. Build every
       // statement without awaiting it, then submit one atomic HTTP transaction.
       const writes: [BatchItem<"pg">, ...BatchItem<"pg">[]] = [
-        db.delete(materialChunks).where(and(
-          eq(materialChunks.materialId, materialId),
-          eq(materialChunks.ownerId, ownerId),
-        )),
+        db
+          .delete(materialChunks)
+          .where(
+            and(
+              eq(materialChunks.materialId, materialId),
+              eq(materialChunks.ownerId, ownerId),
+            ),
+          ),
       ];
 
-      for (let start = 0; start < chunks.length; start += CHUNK_INSERT_BATCH_SIZE) {
+      for (
+        let start = 0;
+        start < chunks.length;
+        start += CHUNK_INSERT_BATCH_SIZE
+      ) {
         const batch = chunks.slice(start, start + CHUNK_INSERT_BATCH_SIZE);
-        writes.push(db.insert(materialChunks).values(batch.map((chunk, index) => ({
-          materialId,
-          ownerId,
-          ordinal: chunk.ordinal,
-          pageNumber: chunk.pageNumber,
-          content: chunk.content,
-          tokenCount: chunk.tokenCount,
-          embedding: embeddings[start + index],
-          embeddingModel: env.EMBEDDING_MODEL,
-        }))));
+        writes.push(
+          db.insert(materialChunks).values(
+            batch.map((chunk, index) => ({
+              materialId,
+              ownerId,
+              ordinal: chunk.ordinal,
+              pageNumber: chunk.pageNumber,
+              content: chunk.content,
+              tokenCount: chunk.tokenCount,
+              embedding: embeddings[start + index],
+              embeddingModel: env.EMBEDDING_MODEL,
+            })),
+          ),
+        );
       }
 
-      writes.push(db.update(materials).set({
-        status: "ready",
-        processingError: null,
-        pageCount,
-        characterCount: text.length,
-        extractedTextBlobUrl,
-        extractedTextBlobPathname,
-        updatedAt: new Date(),
-      }).where(and(eq(materials.id, materialId), eq(materials.ownerId, ownerId))));
+      writes.push(
+        db
+          .update(materials)
+          .set({
+            status: "ready",
+            processingError: null,
+            pageCount,
+            characterCount: text.length,
+            extractedTextBlobUrl,
+            extractedTextBlobPathname,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(materials.id, materialId), eq(materials.ownerId, ownerId)),
+          ),
+      );
 
       await db.batch(writes);
     } catch (error) {
@@ -138,11 +191,20 @@ export async function processMaterial(materialId: string, ownerId: string) {
     }
   } catch (error) {
     const message = safeProcessingMessage(error);
-    await db.update(materials).set({ status: "failed", processingError: message, updatedAt: new Date() })
+    await db
+      .update(materials)
+      .set({
+        status: "failed",
+        processingError: message,
+        updatedAt: new Date(),
+      })
       .where(and(eq(materials.id, materialId), eq(materials.ownerId, ownerId)));
     throw new MaterialProcessingError(message, { cause: error });
   } finally {
-    try { await releaseUnusedQuota(reservationId, ownerId); }
-    catch { console.error("Ingestion quota cleanup failed", { reservationId }); }
+    try {
+      await releaseUnusedQuota(reservationId, ownerId);
+    } catch {
+      console.error("Ingestion quota cleanup failed", { reservationId });
+    }
   }
 }

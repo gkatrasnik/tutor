@@ -3,7 +3,13 @@ import Link from "next/link";
 
 import { Brand } from "@/components/brand";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 import { SignInForm } from "./sign-in-form";
 
@@ -20,7 +26,10 @@ export default async function SignInPage({
       <div className="relative z-10 w-full max-w-md">
         <div className="mb-8 flex items-center justify-between">
           <Brand className="text-lg" />
-          <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-900">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-900"
+          >
             <ArrowLeft className="size-4" aria-hidden="true" />
             Home
           </Link>
@@ -31,7 +40,9 @@ export default async function SignInPage({
             <span className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800">
               <MailCheck className="size-5" aria-hidden="true" />
             </span>
-            <CardTitle className="text-2xl tracking-tight">Welcome to Tutor</CardTitle>
+            <CardTitle className="text-2xl tracking-tight">
+              Welcome to Tutor
+            </CardTitle>
             <CardDescription className="text-sm leading-6">
               Sign in to continue learning from your private material.
             </CardDescription>
@@ -40,13 +51,19 @@ export default async function SignInPage({
             {error && (
               <Alert variant="destructive">
                 <AlertTitle>This sign-in link is no longer valid</AlertTitle>
-                <AlertDescription>Request a fresh link below and use the newest email.</AlertDescription>
+                <AlertDescription>
+                  Request a fresh link below and use the newest email.
+                </AlertDescription>
               </Alert>
             )}
             <SignInForm />
             <div className="flex items-start gap-2 border-t pt-5 text-xs leading-5 text-stone-500">
-              <LockKeyhole className="mt-0.5 size-3.5 shrink-0 text-emerald-700" aria-hidden="true" />
-              Your session uses a signed, HTTP-only cookie. Your learning material stays private.
+              <LockKeyhole
+                className="mt-0.5 size-3.5 shrink-0 text-emerald-700"
+                aria-hidden="true"
+              />
+              Your session uses a signed, HTTP-only cookie. Your learning
+              material stays private.
             </div>
           </CardContent>
         </Card>

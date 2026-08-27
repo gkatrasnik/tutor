@@ -6,8 +6,15 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 
@@ -36,12 +43,16 @@ export function MaterialActions({
     setBusy(true);
     try {
       await mutate(`/api/materials/${id}/process`, "POST");
-      toast.success("Material indexed. Generate or update the outline from your course.");
+      toast.success(
+        "Material indexed. Generate or update the outline from your course.",
+      );
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Retry failed.");
       router.refresh();
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function remove() {
@@ -60,21 +71,37 @@ export function MaterialActions({
     <div className="flex items-center gap-1">
       {canRetry ? (
         <Button variant="outline" size="sm" onClick={retry} disabled={busy}>
-          {busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />} {retryLabel}
+          {busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}{" "}
+          {retryLabel}
         </Button>
       ) : null}
       <AlertDialog>
-        <AlertDialogTrigger render={<Button variant="ghost" size="icon" disabled={busy} aria-label={`Delete ${title}`} />}>
+        <AlertDialogTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon"
+              disabled={busy}
+              aria-label={`Delete ${title}`}
+            />
+          }
+        >
           <Trash2 aria-hidden="true" />
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this material?</AlertDialogTitle>
-            <AlertDialogDescription>This permanently removes “{title}” and its private stored files. The course stays; its outline will need updating to reflect the remaining materials.</AlertDialogDescription>
+            <AlertDialogDescription>
+              This permanently removes “{title}” and its private stored files.
+              The course stays; its outline will need updating to reflect the
+              remaining materials.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={remove}>Delete material</AlertDialogAction>
+            <AlertDialogAction variant="destructive" onClick={remove}>
+              Delete material
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

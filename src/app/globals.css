@@ -126,7 +126,8 @@
   body {
     @apply bg-background text-foreground selection:bg-emerald-200 selection:text-emerald-950;
   }
-  button:not(:disabled), [role="button"]:not(:disabled) {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
     cursor: pointer;
   }
   html {
