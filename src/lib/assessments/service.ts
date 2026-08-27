@@ -108,13 +108,14 @@ export async function assessLesson(sessionId: string, ownerId: string, requestId
       return { id: published.id };
     }
     const signal = AbortSignal.timeout(ASSESSMENT_TIMEOUT_MS);
-    const chunks = await retrieveCourseChunks({ ownerId, courseId: session.courseId, query: `${session.objective}\n${session.retrievalQuery}`, signal });
+    const usage = { ownerId, requestId };
+    const chunks = await retrieveCourseChunks({ ownerId, courseId: session.courseId, query: `${session.objective}\n${session.retrievalQuery}`, signal, usage });
     if (!chunks.length) throw new TutorError("No indexed sources support this assessment. Check the course materials before trying again.");
     const result = assessmentResultSchema.parse(await generateAssessment({
       lesson: { title: session.lessonTitle, objective: session.objective },
       conversation: transcript.map(({ role, content }) => ({ role, content })),
       sources: chunks.map(({ filename, pageNumber, content }) => ({ filename, pageNumber, content })),
-    }, signal, model));
+    }, signal, usage, model));
     const courseGuard = and(eq(courses.id, session.courseId), eq(courses.ownerId, ownerId), eq(courses.status, "ready"),
       eq(courses.sourceVersion, session.sourceVersion), eq(courses.outlineVersion, session.sourceVersion));
     const current = and(assessmentGuard, exists(db.select({ id: courses.id }).from(courses).where(courseGuard)),

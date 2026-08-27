@@ -2,7 +2,7 @@
 
 Tutor turns a learner's private PDF or pasted text into a focused course and a grounded, Socratic tutoring experience.
 
-This repository currently contains **Iterations 1–8: Foundation, Neon database discipline, magic-link authentication, private material uploads, Cohere-backed retrieval, structured course outlines, persistent Socratic tutoring, and assessment/progress** from the implementation plan.
+This repository currently contains **Iterations 1–9: Foundation, Neon database discipline, magic-link authentication, private material uploads, OpenAI-backed retrieval, structured course outlines, persistent Socratic tutoring, assessment/progress, and usage accounting/rate limits** from the implementation plan. Learner/admin analytics pages remain Iteration 10.
 
 ## Start locally
 
@@ -171,10 +171,10 @@ The session page shows the latest 100 saved messages. **Sources** opens a shadcn
 - Returning to a lesson resumes its saved conversation. Replaying an already-completed request ID returns the saved result without another model call or quota reservation.
 - If the browser disconnects, the server continues consuming the bounded stream; Next.js `after` keeps the completion task alive within the route's 120-second duration. Refresh to check the saved result before resending. This is not a durable background queue; a process crash may still interrupt a response.
 - Failed partial answers are not stored as completed answers. Their learner questions remain visible. Interrupted session claims can be replaced after two minutes; tokens fence off late results from the old worker.
-- Once retrieval starts, an attempt consumes the daily allowance even if generation fails or the client disconnects, because embedding/provider work may be billable. The daily limit is shared across sessions and resets at midnight UTC.
+- Once the first Gateway call starts, an attempt consumes the daily allowance even if generation fails or the client disconnects, because embedding/provider work may be billable. Known failures before any Gateway call release their reservation. The daily limit is shared across sessions and resets at midnight UTC.
 - Adding, deleting, or re-indexing sources makes existing sessions read-only. Regenerating the outline detaches the replaced lesson IDs but **preserves sessions and messages**. Find them under **Recent conversations** on the course page. Start a new current lesson to continue tutoring with the new sources.
 
-The planned full usage/cost ledger, ingestion quotas, and Firewall rate limits remain Iteration 9. The daily tutor reservation is included now so the streaming path is bounded from its first release. Assessments and **Finish lesson** are available in Iteration 8 below.
+Iteration 9 below extends the original daily tutor reservation with a per-call usage ledger, ingestion quotas, and shared rolling limits. Assessments and **Finish lesson** are described in Iteration 8 below.
 
 ### Tutor smoke test
 
@@ -212,7 +212,7 @@ After at least two completed tutor exchanges, select **Finish lesson** below the
 6. A Neon HTTP `db.batch` transaction locks the course and session, checks ownership, source/outline versions, and claim token, then saves the result plus evidence message/chunk IDs and releases the lease. Failed attempts expose safe errors without private provider details. Expired attempts can be reclaimed; late workers cannot save completion or release a newer lease.
 7. The client reloads saved history and refreshes the Server Component data. A lost connection may interrupt the request: refresh history before retrying. Assessment is bounded synchronous work, not a durable background job.
 
-The existing 30-turn quota remains specific to tutor messages; assessments do not consume it. Successful unchanged transcripts are reused, requests have bounded context/output/time, and the configured Gateway key spend cap still applies. The full per-feature usage/cost ledger and rolling AI endpoint rate limit remain Iteration 9; repeated failed assessments are not yet separately quota-limited.
+The 30-turn quota remains specific to tutor messages; assessments do not consume it. Successful unchanged transcripts are reused, requests have bounded context/output/time, and the configured Gateway key spend cap still applies. Iteration 9 adds usage/cost recording and a shared rolling AI endpoint limit, including repeated failed assessment requests.
 
 ### Assessment smoke test
 
@@ -224,3 +224,54 @@ The existing 30-turn quota remains specific to tutor messages; assessments do no
 6. Add a source and update the outline. The old conversation/assessment should stay readable, but its pass must not complete a new lesson.
 
 Automated tests use fake AI providers and isolated PGlite PostgreSQL through the actual Neon HTTP adapter. They cover the 69/70 boundary, retries/history/reuse, input and output validation, failed/truncated generation, empty retrieval, ownership, source changes, lease recovery, stale publication, persistence failure, migration constraints, and deterministic progress. They do not apply production migrations, send real learner content to providers, or validate live model grading quality.
+
+## Usage accounting and rate limits (Iteration 9)
+
+### Rollout
+
+Stop the old app, run `pnpm db:migrate`, then restart with `pnpm dev`. Apply the migration to each deployment's Neon branch before deploying the updated code. `0008_usage_accounting.sql` adds the usage ledger, quota reservations, rolling request windows, and an ingestion counter on the existing `tutor_daily_usage` table. Existing tutor counts, chunks, vectors, source versions, and progress are preserved. **No re-embedding is needed.** Historical costs are not backfilled or guessed.
+
+The existing `AI_GATEWAY_API_KEY` is required for every app AI call. The app refuses to fall back silently to deployment OIDC without the dedicated key. In the Vercel AI Gateway dashboard, verify that this specific key has a **$5 monthly spend quota** and that **auto-top-up is disabled**. These account settings cannot be inferred or enforced by a local environment variable; no credits are purchased and no account settings are changed by the application.
+
+### What gets recorded
+
+`src/lib/usage/gateway.ts` wraps every app Gateway call: document/query embeddings, each outline attempt, tutor streams, and assessments. Each call inserts a durable `pending` event before contacting the provider, then finalizes it with:
+
+- Authenticated owner, feature, model, and a logical request ID (shared by retrieval and generation).
+- Input, output, cache-read, reasoning, and total tokens when reported by AI SDK v7. Cached and reasoning counts are already included in totals; do not add them again.
+- Gateway-operation latency and first text/reasoning-token latency for streams. Non-streaming first-token latency is null.
+- Actual USD cost from `providerMetadata.gateway.cost`, stored as `numeric(24,18)`, and the Gateway generation ID when supplied. Unknown cost remains null, distinct from a reported zero. See [Gateway response cost metadata](https://vercel.com/academy/ai-gateway/ai-gateway-pricing).
+- Success/failure and a safe error code. No prompts, responses, source text, Blob URLs, credentials, or raw provider metadata are stored in the usage ledger.
+
+Structured-output retries have separate events and retain cost metadata even for invalid JSON. A successful Gateway call can still be followed by an application/database failure; the ledger describes the Gateway operation, not course publication. The stream continues being consumed after a browser disconnect using the existing `after` completion path. If initial accounting fails, no AI call starts. If final accounting fails or the process dies, the event remains pending/unknown for manual reconciliation; the app never repeats billable work to repair an accounting failure.
+
+The embedding-maintenance CLI also records calls. It batches by owner for attribution; synthetic probe events have a null owner. Maintenance bypasses learner quotas, but not the Gateway key budget, and now requires migration 0008 even for `--probe`. It never resets course progress or learner counters.
+
+### Limits and reservations
+
+- **30 tutor turns per user per UTC day**, shared across sessions.
+- **3 material ingestions per user per UTC day**, shared across courses. Uploading a Blob alone does not count; processing/indexing does. Quota denial leaves the material unchanged and returns HTTP 429.
+- **5 valid AI endpoint requests per user per rolling 60 seconds**, shared across ingestion, outline, tutor, and assessment POSTs. Even saved-result replays count toward this short-window request limit, but do not make AI calls or consume another daily quota. Reading conversations/history does not count. The development retrieval inspector is limited too.
+
+Daily counters and reservation rows are created atomically before work begins. Immediately before the first Gateway call, the reservation is marked started. Extraction/validation/index-compatibility failures before any call release an unused reservation exactly once, against its original UTC day. Once any Gateway request starts, a timeout, 429, other provider failure, or disconnect does not refund the daily quota: billing may already have occurred. Process crashes are conservative; an unreleased reservation counts until the day's allowance resets. No job queue or automatic reconciliation worker is implied.
+
+The database rolling limiter uses one bounded timestamp array per authenticated user and an atomic upsert, so concurrent requests and separate server instances cannot each spend the same slot. It always applies, including on localhost. Rate-limit responses include `Retry-After` and never trust a user-ID header or body field.
+
+### Vercel Firewall setup (manual)
+
+The SDK integration is implemented, but **installing the package does not publish a Firewall rule**. Following [Vercel's Rate Limiting SDK setup](https://vercel.com/docs/vercel-firewall/vercel-waf/rate-limiting-sdk):
+
+1. Open the project's **Firewall → Configure → New Rule**. Select the **`@vercel/firewall`** condition with rate-limit ID `tutor-ai`.
+2. Set its rate limit to **5 requests per 60 seconds**, with rate-limited requests denied. Review and publish the rule. Check feature availability/pricing for your Vercel plan before enabling it; this implementation does not upgrade the account.
+3. Set `VERCEL_FIREWALL_RATE_LIMIT_ID=tutor-ai` in the matching Vercel deployment environments, then redeploy. The server supplies the authenticated user ID as `rateLimitKey`; don't add a client-controlled user header condition.
+4. For Preview, follow Vercel's Protection Bypass for Automation/system-environment-variable requirements. Test the published rule in Preview before Production. Leave the setting empty locally; the database guard still enforces the rolling limit.
+
+When configured in production, a missing/unreachable rule fails closed with 503; a rate-limited request receives 429. The SDK uses the configured deployment host and sanitized headers. The database check remains active too, providing exact rolling-window enforcement independent of the Firewall's configured algorithm.
+
+### Checkpoint and smoke test
+
+Trace a tutor request through the authenticated Route Handler, shared rolling limit, session claim, daily reservation, embedding event, streaming tutor event, and saved answer. Compare `request_id` to group its two Gateway calls. Quotas count a learner turn once; usage counts each actual call separately.
+
+After applying the migration, send one normal tutor message and inspect its two `ai_usage_events` rows in Neon/Drizzle Studio. Reconcile their model, generation ID, token counts, and reported USD cost with the Gateway dashboard; do not treat missing metadata as zero. Then use the mocked automated tests to reproduce 429s without spending credits. Test real Firewall rejection in Preview after publishing the rule. No live AI calls or production Firewall changes are part of automated tests.
+
+The learner `/app/usage` and read-only admin analytics views are the **next iteration**. For a small learning exercise, add a quota test showing that releasing an already-started ingestion cannot restore its daily allowance.

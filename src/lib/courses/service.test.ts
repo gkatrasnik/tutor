@@ -62,7 +62,7 @@ async function storedLessons() {
 describe("course-wide generation with Neon HTTP SQL executed in PostgreSQL", () => {
   it("combines both materials and atomically saves ordered lessons", async () => {
     expect(await ensureCourseOutline(courseId, ownerId)).toEqual({ id: courseId, status: "ready" });
-    expect(mocks.generate).toHaveBeenCalledExactlyOnceWith(sourceFixture);
+    expect(mocks.generate).toHaveBeenCalledExactlyOnceWith(sourceFixture, { ownerId, requestId: expect.any(String) });
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
     expect(await storedLessons()).toEqual(outlineFixture.lessons.map((lesson, ordinal) => ({ title: lesson.title, ordinal })));
     expect(await course()).toMatchObject({ status: "ready", source_version: 2, outline_version: 2 });

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ user: vi.fn(), prepare: vi.fn(), stream: vi.fn(), after: vi.fn() }));
+vi.mock("@/lib/usage/rate-limit", () => ({ enforceAiRateLimit: vi.fn() }));
 vi.mock("@/lib/auth/dal", () => ({ requireUser: mocks.user }));
 vi.mock("@/lib/tutor/service", () => ({ prepareTutorTurn: mocks.prepare, TutorError: class extends Error {} }));
 vi.mock("@/lib/tutor/stream", () => ({ streamTutorTurn: mocks.stream }));

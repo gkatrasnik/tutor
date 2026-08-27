@@ -9,7 +9,7 @@ export const CHUNK_METADATA_SQL = `SELECT md5(COALESCE(jsonb_agg(to_jsonb(c) - '
 export async function readIndex(database) {
   // One read-only transaction gives rows and fingerprint the same snapshot.
   const [rows, fingerprint] = await database.transaction([
-    database.query(`SELECT id, content, token_count, embedding_model FROM material_chunks ORDER BY id LIMIT ${MAX_REEMBED_CHUNKS + 1}`),
+    database.query(`SELECT id, owner_id, content, token_count, embedding_model FROM material_chunks ORDER BY id LIMIT ${MAX_REEMBED_CHUNKS + 1}`),
     database.query(INDEX_FINGERPRINT_SQL),
   ], { isolationLevel: "RepeatableRead", readOnly: true });
   if (rows.length > MAX_REEMBED_CHUNKS) throw new Error(`This atomic MVP migration is limited to ${MAX_REEMBED_CHUNKS} chunks. Use a staged migration for a larger index.`);
@@ -34,20 +34,23 @@ export async function preservationSnapshot(database) {
  * snapshot never leaves a partially replaced index. No material status writes.
  * @param {{ database: import('@neondatabase/serverless').NeonQueryFunction<false, false>, model: string, dimensions: number,
  *   index: Awaited<ReturnType<typeof readIndex>>, onProgress?: (done: number, total: number) => void,
- *   client?: ReturnType<typeof createEmbeddingClient> }} options
+ *   client?: ReturnType<typeof createEmbeddingClient>, clientForOwner?: (ownerId: string) => ReturnType<typeof createEmbeddingClient> }} options
  */
 export async function reembedIndex({ database, model, dimensions, index, onProgress = () => {},
-  client = createEmbeddingClient({ model, dimensions }) }) {
+  client = createEmbeddingClient({ model, dimensions }), clientForOwner = () => client }) {
   if (dimensions !== 1536) throw new Error("The database vector dimension must remain 1536.");
   const pending = index.rows.filter((row) => row.embedding_model !== model);
   if (pending.length === 0) return 0;
   const replacements = [];
-  for (let start = 0; start < pending.length; start += EMBEDDING_BATCH_SIZE) {
-    const batch = pending.slice(start, start + EMBEDDING_BATCH_SIZE);
-    const embeddings = await client.embedDocuments(batch.map((row) => row.content));
-    if (embeddings.length !== batch.length) throw new Error("Incomplete embedding batch; no database writes were made.");
-    replacements.push(...batch.map((row, i) => ({ id: row.id, embedding: JSON.stringify(validateEmbedding(embeddings[i], dimensions)) })));
-    onProgress(replacements.length, pending.length);
+  for (const ownerId of new Set(pending.map((row) => row.owner_id))) {
+    const owned = pending.filter((row) => row.owner_id === ownerId);
+    for (let start = 0; start < owned.length; start += EMBEDDING_BATCH_SIZE) {
+      const batch = owned.slice(start, start + EMBEDDING_BATCH_SIZE);
+      const embeddings = await clientForOwner(ownerId).embedDocuments(batch.map((row) => row.content));
+      if (embeddings.length !== batch.length) throw new Error("Incomplete embedding batch; no database writes were made.");
+      replacements.push(...batch.map((row, i) => ({ id: row.id, embedding: JSON.stringify(validateEmbedding(embeddings[i], dimensions)) })));
+      onProgress(replacements.length, pending.length);
+    }
   }
   const result = await database.transaction([
     database.query("SET LOCAL lock_timeout = '5s'"),

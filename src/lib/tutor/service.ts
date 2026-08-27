@@ -3,8 +3,10 @@ import "server-only";
 import { and, desc, eq, exists, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { courses, lessonAssessments, lessons, materialChunks, materials, messages, tutorDailyUsage, tutorSessions } from "@/db/schema";
-import { TUTOR_DAILY_LIMIT, TUTOR_HISTORY_MESSAGES, TUTOR_LEASE_MS, type ChatMessage } from "./contracts";
+import { courses, lessonAssessments, lessons, materialChunks, materials, messages, tutorSessions } from "@/db/schema";
+import { reserveDailyQuota } from "@/lib/usage/quotas";
+import { AiLimitError } from "@/lib/usage/contracts";
+import { TUTOR_HISTORY_MESSAGES, TUTOR_LEASE_MS, type ChatMessage } from "./contracts";
 
 export class TutorError extends Error {
   constructor(message: string, public readonly status = 409) { super(message); }
@@ -69,6 +71,7 @@ export async function getMessageSources(sessionId: string, messageId: string, ow
 export type PreparedTurn = {
   session: Awaited<ReturnType<typeof getTutorSession>>;
   ownerId: string; token: string; messageId: string; message: string;
+  requestId: string; reservationId?: string;
   history: { role: "user" | "assistant"; content: string }[];
 };
 
@@ -107,7 +110,7 @@ export async function prepareTutorTurn(sessionId: string, ownerId: string, reque
   `);
   const answer = (claimed.rows as { id: string; role: string }[]).find((row) => row.role === "assistant");
   if (!answer) throw new TutorError("A response or assessment is already running, or the course changed. Refresh and try again; interrupted attempts unlock after two minutes.");
-  const turn: PreparedTurn = { session, ownerId, token, messageId: answer.id, message, history: [] };
+  const turn: PreparedTurn = { session, ownerId, token, messageId: answer.id, message, history: [], requestId };
   try {
     const recent = await db.select({ role: messages.role, content: messages.content }).from(messages)
       .where(and(eq(messages.sessionId, sessionId), eq(messages.ownerId, ownerId), eq(messages.status, "complete"),
@@ -117,13 +120,10 @@ export async function prepareTutorTurn(sessionId: string, ownerId: string, reque
       .orderBy(desc(messages.ordinal)).limit(TUTOR_HISTORY_MESSAGES);
     turn.history = recent.reverse();
     // Reserve before retrieval (which itself calls the embedding provider).
-    const quota = await db.insert(tutorDailyUsage).values({ ownerId, day: sql`(now() at time zone 'UTC')::date::text`, turns: 1 })
-      .onConflictDoUpdate({ target: [tutorDailyUsage.ownerId, tutorDailyUsage.day], set: { turns: sql`${tutorDailyUsage.turns} + 1` },
-        setWhere: sql`${tutorDailyUsage.turns} < ${TUTOR_DAILY_LIMIT}` }).returning({ day: tutorDailyUsage.day });
-    if (!quota.length) throw new TutorError("You have reached today's 30 tutor turns. Please return after midnight UTC.", 429);
+    turn.reservationId = await reserveDailyQuota(ownerId, "tutor");
     return turn;
   } catch (error) {
-    await failTutorTurn(turn, error instanceof TutorError ? error.message : "The conversation could not be prepared. Please try again.");
+    await failTutorTurn(turn, error instanceof TutorError || error instanceof AiLimitError ? error.message : "The conversation could not be prepared. Please try again.");
     throw error;
   }
 }

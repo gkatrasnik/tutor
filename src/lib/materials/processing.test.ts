@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { materials, type Material } from "../../db/schema";
 import type { ChunkDraft } from "../rag/chunking";
+import { AiLimitError } from "../usage/contracts";
 
 type QueryRequest = { sql: string; params: unknown[] };
 
@@ -13,10 +14,13 @@ const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   chunkMaterialPages: vi.fn(),
   embedDocuments: vi.fn(),
+  reserve: vi.fn(),
+  release: vi.fn(),
 }));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/env", () => ({ env: { EMBEDDING_MODEL: "openai/text-embedding-3-small" } }));
+vi.mock("@/lib/usage/quotas", () => ({ reserveDailyQuota: mocks.reserve, releaseUnusedQuota: mocks.release }));
 vi.mock("@vercel/blob", () => ({ get: mocks.get, put: vi.fn() }));
 vi.mock("unpdf", () => ({ extractText: vi.fn(), getDocumentProxy: vi.fn() }));
 vi.mock("@/db", async () => {
@@ -68,6 +72,7 @@ function setChunks(count: number) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.reserve.mockResolvedValue("test-reservation");
   directQueries = [];
   mocks.get.mockResolvedValue({ statusCode: 200, stream: new Response("Notes").body });
   setChunks(1);
@@ -149,5 +154,18 @@ describe("material indexing with the Neon HTTP adapter", () => {
     expect(mocks.get).not.toHaveBeenCalled();
     expect(mocks.embedDocuments).not.toHaveBeenCalled();
     expect(mocks.transaction).not.toHaveBeenCalled();
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+  it("rejects a spent ingestion quota before Blob work or processing-state changes", async () => {
+    mocks.reserve.mockRejectedValueOnce(new AiLimitError("Daily ingestion limit"));
+    await expect(processMaterial(material.id, material.ownerId)).rejects.toMatchObject({ status: 429 });
+    expect(mocks.get).not.toHaveBeenCalled(); expect(mocks.embedDocuments).not.toHaveBeenCalled();
+    expect(directQueries).toHaveLength(1);
+  });
+  it("cleans up an unused reservation after extraction fails", async () => {
+    mocks.get.mockRejectedValueOnce(new Error("Blob unavailable"));
+    await expect(processMaterial(material.id, material.ownerId)).rejects.toThrow();
+    expect(mocks.embedDocuments).not.toHaveBeenCalled();
+    expect(mocks.release).toHaveBeenCalledExactlyOnceWith("test-reservation", material.ownerId);
   });
 });

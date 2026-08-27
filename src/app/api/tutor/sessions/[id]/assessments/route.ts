@@ -3,10 +3,14 @@ import { requireUser } from "@/lib/auth/dal";
 import { assessmentInputSchema } from "@/lib/assessments/contracts";
 import { assessLesson, getAssessmentHistory } from "@/lib/assessments/service";
 import { TutorError } from "@/lib/tutor/service";
+import { enforceAiRateLimit } from "@/lib/usage/rate-limit";
+import { aiLimitResponse } from "@/lib/usage/contracts";
 
 export const maxDuration = 120;
 type Context = { params: Promise<{ id: string }> };
 function failure(error: unknown) {
+  const limited = aiLimitResponse(error);
+  if (limited) return limited;
   return Response.json({ error: error instanceof TutorError ? error.message : "Could not load or save the assessment. Refresh before trying again." },
     { status: error instanceof TutorError ? error.status : 500, headers: { "Cache-Control": "no-store" } });
 }
@@ -30,6 +34,9 @@ export async function POST(request: Request, context: Context) {
   try { body = JSON.parse(raw); } catch { return Response.json({ error: "Invalid assessment request." }, { status: 400 }); }
   const input = assessmentInputSchema.safeParse(body);
   if (!input.success) return Response.json({ error: "Send only a valid request ID. Assessment evidence is loaded on the server." }, { status: 400 });
-  try { return Response.json(await assessLesson(id.data, user.id, input.data.requestId), { headers: { "Cache-Control": "no-store" } }); }
+  try {
+    await enforceAiRateLimit(user.id, request);
+    return Response.json(await assessLesson(id.data, user.id, input.data.requestId), { headers: { "Cache-Control": "no-store" } });
+  }
   catch (error) { return failure(error); }
 }

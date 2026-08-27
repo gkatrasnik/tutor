@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ user: vi.fn(), process: vi.fn(), ensure: vi.fn() }));
+vi.mock("@/lib/usage/rate-limit", () => ({ enforceAiRateLimit: vi.fn() }));
 vi.mock("@/lib/auth/dal", () => ({ requireUser: mocks.user }));
 vi.mock("@/lib/materials/processing", () => ({ processMaterial: mocks.process, MaterialProcessingError: class extends Error {} }));
 vi.mock("@/lib/courses/service", () => ({ ensureCourseOutline: mocks.ensure, CourseGenerationError: class extends Error {} }));

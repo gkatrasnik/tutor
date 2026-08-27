@@ -3,6 +3,7 @@ import {
   check,
   index,
   integer,
+  numeric,
   jsonb,
   pgEnum,
   pgTable,
@@ -166,7 +167,49 @@ export const tutorDailyUsage = pgTable("tutor_daily_usage", {
   ownerId: text("owner_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
   day: text("day").notNull(),
   turns: integer("turns").default(0).notNull(),
+  ingestions: integer("ingestions").default(0).notNull(),
 }, (table) => [uniqueIndex("tutor_daily_usage_owner_day_unique").on(table.ownerId, table.day)]);
+
+export const aiFeature = pgEnum("ai_feature", ["embedding", "outline", "tutor", "assessment"]);
+export const aiUsageStatus = pgEnum("ai_usage_status", ["pending", "success", "failure"]);
+export const quotaKind = pgEnum("quota_kind", ["tutor", "ingestion"]);
+export const quotaState = pgEnum("quota_state", ["reserved", "started", "released"]);
+
+export const aiUsageEvents = pgTable("ai_usage_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  ownerId: text("owner_id").references(() => profiles.id, { onDelete: "cascade" }),
+  requestId: uuid("request_id").notNull(),
+  feature: aiFeature("feature").notNull(),
+  model: text("model").notNull(),
+  status: aiUsageStatus("status").default("pending").notNull(),
+  inputTokens: integer("input_tokens"),
+  outputTokens: integer("output_tokens"),
+  cachedTokens: integer("cached_tokens"),
+  reasoningTokens: integer("reasoning_tokens"),
+  totalTokens: integer("total_tokens"),
+  latencyMs: integer("latency_ms"),
+  timeToFirstTokenMs: integer("time_to_first_token_ms"),
+  costUsd: numeric("cost_usd", { precision: 24, scale: 18 }),
+  gatewayGenerationId: text("gateway_generation_id"),
+  errorCode: text("error_code"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [index("ai_usage_owner_created_idx").on(table.ownerId, table.createdAt),
+  index("ai_usage_request_idx").on(table.requestId),
+  check("ai_usage_cost_nonnegative", sql`${table.costUsd} >= 0`)]);
+
+export const aiQuotaReservations = pgTable("ai_quota_reservations", {
+  id: uuid("id").primaryKey(),
+  ownerId: text("owner_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+  day: text("day").notNull(),
+  kind: quotaKind("kind").notNull(),
+  state: quotaState("state").default("reserved").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [index("ai_quota_owner_day_idx").on(table.ownerId, table.day)]);
+
+export const aiRateLimits = pgTable("ai_rate_limits", {
+  ownerId: text("owner_id").primaryKey().references(() => profiles.id, { onDelete: "cascade" }),
+  requests: timestamp("requests", { withTimezone: true }).array().notNull(),
+});
 
 export const assessmentStatus = pgEnum("assessment_status", ["pending", "complete", "failed"]);
 

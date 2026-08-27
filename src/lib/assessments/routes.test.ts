@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ user: vi.fn(), assess: vi.fn(), history: vi.fn() }));
+vi.mock("@/lib/usage/rate-limit", () => ({ enforceAiRateLimit: vi.fn() }));
 vi.mock("@/lib/auth/dal", () => ({ requireUser: mocks.user }));
 vi.mock("@/lib/assessments/service", () => ({ assessLesson: mocks.assess, getAssessmentHistory: mocks.history }));
 vi.mock("@/lib/tutor/service", () => ({ TutorError: class extends Error { constructor(message: string, public status = 409) { super(message); } } }));

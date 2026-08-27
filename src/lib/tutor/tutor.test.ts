@@ -28,10 +28,11 @@ type Query = { sql: string; params: unknown[]; options: { arrayMode?: boolean } 
 let pg: PGlite;
 let sessionId: string;
 
-beforeAll(async () => { pg = await createTestDatabase(); await pg.exec(migrationSql("0005_tutor_sessions.sql")); await pg.exec(migrationSql("0006_lesson_assessments.sql")); }, 30_000);
+beforeAll(async () => { pg = await createTestDatabase(); await pg.exec(migrationSql("0005_tutor_sessions.sql")); await pg.exec(migrationSql("0006_lesson_assessments.sql")); await pg.exec(migrationSql("0008_usage_accounting.sql")); }, 30_000);
 afterAll(async () => { await pg?.close(); });
 beforeEach(async () => {
   vi.resetAllMocks();
+  vi.stubEnv("AI_GATEWAY_API_KEY", "fake-key-no-network");
   await pg.exec(`TRUNCATE profiles CASCADE;
     INSERT INTO profiles(id,email) VALUES ('learner-a','a@example.test'), ('learner-b','b@example.test');`);
   await pg.query("INSERT INTO courses(id,owner_id,name,status,outline_version) VALUES ($1,$2,'Learning','ready',0)", [courseId, ownerId]);
@@ -72,7 +73,7 @@ function modelFor(text = "Attention helps us focus [1]. What might distract you?
     if (failure) controller.enqueue({ type: "error", error: new Error("private provider details") });
     else controller.enqueue({ type: "finish", finishReason: { unified: "stop", raw: "stop" }, usage: {
       inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 10, text: 10, reasoning: 0 },
-    } });
+    }, providerMetadata: { gateway: { cost: "0.00003", generationId: "stream-123" } } });
     controller.close();
   } }) }) });
 }
@@ -102,6 +103,10 @@ describe("persistent tutoring", () => {
     expect(messages[1].sourceCount).toBe(1);
     expect((await getTutorSession(sessionId, ownerId)).activeToken).toBeNull();
     expect(await turns()).toBe(1);
+    const usage = (await pg.query<{ time_to_first_token_ms: number }>("SELECT * FROM ai_usage_events")).rows[0];
+    expect(usage).toMatchObject({ owner_id: ownerId, request_id: turn.requestId, feature: "tutor", status: "success",
+      input_tokens: 10, output_tokens: 10, total_tokens: 20, cost_usd: "0.000030000000000000", gateway_generation_id: "stream-123" });
+    expect(usage.time_to_first_token_ms).toBeGreaterThanOrEqual(0);
   });
 
   it("does not create duplicate turns or charge again when a completed request is replayed", async () => {
@@ -175,6 +180,18 @@ describe("persistent tutoring", () => {
     await stream.response.text(); await stream.completion;
     expect(model.doStreamCalls).toHaveLength(0);
     expect((await getTutorMessages(sessionId, ownerId))[1].content).toContain("couldn't find supporting passages");
+    // Retrieval is mocked without a Gateway call in this test, so nothing billed.
+    expect(await turns()).toBe(0);
+  });
+
+  it("releases a reservation when retrieval fails before a Gateway call", async () => {
+    mocks.retrieve.mockRejectedValue(new Error("Index incompatible"));
+    const turn = await prepare(); const model = modelFor();
+    const stream = streamTutorTurn(turn, model);
+    await stream.response.text(); await stream.completion;
+    expect(await turns()).toBe(0);
+    expect(model.doStreamCalls).toHaveLength(0);
+    expect((await pg.query("SELECT * FROM ai_usage_events")).rows).toHaveLength(0);
   });
 
   it("limits paid turn attempts atomically per user and UTC day", async () => {

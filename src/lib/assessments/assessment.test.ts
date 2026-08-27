@@ -32,10 +32,12 @@ beforeAll(async () => {
   pg = await createTestDatabase();
   await pg.exec(migrationSql("0005_tutor_sessions.sql"));
   await pg.exec(migrationSql("0006_lesson_assessments.sql"));
+  await pg.exec(migrationSql("0008_usage_accounting.sql"));
 }, 30_000);
 afterAll(async () => { await pg?.close(); });
 beforeEach(async () => {
   vi.resetAllMocks();
+  vi.stubEnv("AI_GATEWAY_API_KEY", "fake-key-no-network");
   await pg.exec(`TRUNCATE profiles CASCADE;
     INSERT INTO profiles(id,email) VALUES ('learner-a','a@example.test'),('learner-b','b@example.test');`);
   await pg.query("INSERT INTO courses(id,owner_id,name,status,outline_version,lesson_count) VALUES ($1,$2,'Learning','ready',0,2)", [courseId, ownerId]);

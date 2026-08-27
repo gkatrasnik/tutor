@@ -5,6 +5,7 @@ import { and, asc, cosineDistance, eq, sql, type SQL } from "drizzle-orm";
 import { db } from "@/db";
 import { courses, materialChunks, materials } from "@/db/schema";
 import { env } from "@/lib/env";
+import type { AiContext } from "@/lib/usage/contracts";
 
 import { RETRIEVAL_LIMIT } from "./contracts";
 import { EmbeddingError, embedQuery } from "./embeddings";
@@ -25,13 +26,13 @@ export type RetrievalResult = {
   similarity: number;
 };
 
-export async function retrieveCourseChunks({ ownerId, courseId, query, signal }: {
-  ownerId: string; courseId: string; query: string; signal?: AbortSignal;
+export async function retrieveCourseChunks({ ownerId, courseId, query, signal, usage }: {
+  ownerId: string; courseId: string; query: string; signal?: AbortSignal; usage?: AiContext;
 }) {
   const scope = and(eq(courses.id, courseId), eq(courses.ownerId, ownerId), eq(materials.ownerId, ownerId),
     eq(materialChunks.ownerId, ownerId), eq(materials.status, "ready"));
   await assertCompatibleIndex(scope);
-  const queryEmbedding = await embedQuery(query, signal);
+  const queryEmbedding = await embedQuery(query, signal, { ...usage, ownerId, requestId: usage?.requestId ?? crypto.randomUUID() });
   const distance = cosineDistance(materialChunks.embedding, queryEmbedding);
   return db.select({ id: materialChunks.id, filename: materials.originalFilename,
     ordinal: materialChunks.ordinal, pageNumber: materialChunks.pageNumber, content: materialChunks.content,
@@ -52,7 +53,7 @@ export async function retrieveMaterialChunks({
 }): Promise<RetrievalResult[]> {
   await assertCompatibleIndex(and(eq(materialChunks.ownerId, ownerId), eq(materialChunks.materialId, materialId),
     eq(materials.ownerId, ownerId), eq(courses.ownerId, ownerId)));
-  const queryEmbedding = await embedQuery(query);
+  const queryEmbedding = await embedQuery(query, undefined, { ownerId, requestId: crypto.randomUUID() });
   const distance = cosineDistance(materialChunks.embedding, queryEmbedding);
   const similarity = sql<number>`1 - (${distance})`;
 

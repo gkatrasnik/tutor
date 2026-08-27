@@ -17,7 +17,7 @@ describe("course-wide retrieval SQL", () => {
   it("retrieves the nearest six chunks from the owned course's indexed materials", async () => {
     const signal = AbortSignal.timeout(1000);
     await retrieveCourseChunks({ ownerId: "learner-a", courseId: "course-a", query: "objective and latest message", signal });
-    expect(mocks.embed).toHaveBeenCalledExactlyOnceWith("objective and latest message", signal);
+    expect(mocks.embed).toHaveBeenCalledExactlyOnceWith("objective and latest message", signal, { ownerId: "learner-a", requestId: expect.any(String) });
     const [sql, params] = mocks.query.mock.calls[1];
     for (const table of ["courses", "materials", "material_chunks"]) expect(sql).toContain(`"${table}"."owner_id"`);
     expect(sql).toContain('"courses"."id" =');

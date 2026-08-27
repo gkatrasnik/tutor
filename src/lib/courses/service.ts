@@ -64,7 +64,7 @@ export async function ensureCourseOutline(courseId: string, ownerId: string): Pr
   const attemptGuard = and(ownedCourse, eq(courses.generationToken, token), eq(courses.status, "generating"));
   const publishGuard = and(attemptGuard, eq(courses.sourceVersion, existing.sourceVersion));
   try {
-    const outline = await generateCourseOutline({ courseName: existing.name, materials: sourceMaterials });
+    const outline = await generateCourseOutline({ courseName: existing.name, materials: sourceMaterials }, { ownerId, requestId: token });
     const lessonValues = outline.lessons.map((lesson, ordinal) => sql`(
       ${ordinal}::integer, ${lesson.title}::text, ${lesson.objective}::text,
       ${JSON.stringify(lesson.concepts)}::jsonb, ${lesson.retrievalQuery}::text

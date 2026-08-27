@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/env", () => ({ env: { TUTOR_MODEL: "alibaba/qwen3.7-flash" } }));
+vi.mock("@/lib/usage/gateway", () => ({ recordGateway: async (_context: unknown, _feature: string, _model: string, operation: (span: { observe: () => void }) => Promise<unknown>) => operation({ observe() {} }) }));
 
 import { generateCourseOutline } from "./generation";
 import { outlineFixture, sourceFixture } from "./fixtures.test-support";
 import { buildCoursePrompt, courseOutlineSchema, COURSE_OUTPUT_TOKENS } from "./outline";
+const usage = { ownerId: "learner-a", requestId: crypto.randomUUID() };
 
 function response(text: string): Awaited<ReturnType<MockLanguageModelV4["doGenerate"]>> {
   return {
@@ -41,7 +43,7 @@ describe("course outline contract", () => {
 describe("structured course generation", () => {
   it("uses non-thinking structured output capped at 2500 tokens and preserves lesson order", async () => {
     const model = new MockLanguageModelV4({ doGenerate: response(JSON.stringify(outlineFixture)) });
-    expect(await generateCourseOutline(sourceFixture, model)).toEqual(outlineFixture);
+    expect(await generateCourseOutline(sourceFixture, usage, model)).toEqual(outlineFixture);
     expect(model.doGenerateCalls).toHaveLength(1);
     expect(model.doGenerateCalls[0]).toMatchObject({ maxOutputTokens: COURSE_OUTPUT_TOKENS, reasoning: "none", responseFormat: { type: "json" } });
     expect(model.doGenerateCalls[0].abortSignal).toBeDefined();
@@ -49,7 +51,7 @@ describe("structured course generation", () => {
 
   it.each(["", "not JSON", JSON.stringify({ ...outlineFixture, lessons: [] })])("retries invalid structured output once: %s", async (invalid) => {
     const model = new MockLanguageModelV4({ doGenerate: [response(invalid), response(JSON.stringify(outlineFixture))] });
-    expect(await generateCourseOutline(sourceFixture, model)).toEqual(outlineFixture);
+    expect(await generateCourseOutline(sourceFixture, usage, model)).toEqual(outlineFixture);
     expect(model.doGenerateCalls).toHaveLength(2);
     expect(JSON.stringify(model.doGenerateCalls[1].prompt)).toContain("previous outline did not match");
     expect(JSON.stringify(model.doGenerateCalls[1].prompt)).not.toContain("not JSON");
@@ -57,13 +59,13 @@ describe("structured course generation", () => {
 
   it("stops after the second invalid output", async () => {
     const model = new MockLanguageModelV4({ doGenerate: response("bad JSON") });
-    await expect(generateCourseOutline(sourceFixture, model)).rejects.toThrow();
+    await expect(generateCourseOutline(sourceFixture, usage, model)).rejects.toThrow();
     expect(model.doGenerateCalls).toHaveLength(2);
   });
 
   it("does not automatically retry provider failures", async () => {
     const model = new MockLanguageModelV4({ doGenerate: async () => { throw new Error("Provider unavailable"); } });
-    await expect(generateCourseOutline(sourceFixture, model)).rejects.toThrow("Provider unavailable");
+    await expect(generateCourseOutline(sourceFixture, usage, model)).rejects.toThrow("Provider unavailable");
     expect(model.doGenerateCalls).toHaveLength(1);
   });
 });

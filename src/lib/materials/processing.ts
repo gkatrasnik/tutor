@@ -8,6 +8,7 @@ import { extractText, getDocumentProxy } from "unpdf";
 import { db } from "@/db";
 import { materialChunks, materials } from "@/db/schema";
 import { env } from "@/lib/env";
+import { releaseUnusedQuota, reserveDailyQuota } from "@/lib/usage/quotas";
 import { chunkMaterialPages, MaterialChunkLimitError, type SourcePage } from "@/lib/rag/chunking";
 import { EmbeddingError, embedDocuments } from "@/lib/rag/embeddings";
 
@@ -38,10 +39,10 @@ export async function processMaterial(materialId: string, ownerId: string) {
 
   if (!material) throw new MaterialProcessingError("Material not found.");
 
-  await db.update(materials).set({ status: "processing", processingError: null, updatedAt: new Date() })
-    .where(and(eq(materials.id, materialId), eq(materials.ownerId, ownerId)));
-
+  const reservationId = await reserveDailyQuota(ownerId, "ingestion");
   try {
+    await db.update(materials).set({ status: "processing", processingError: null, updatedAt: new Date() })
+      .where(and(eq(materials.id, materialId), eq(materials.ownerId, ownerId)));
     const bytes = await readPrivateBlob(material.blobPathname);
     let text: string;
     let sourcePages: SourcePage[];
@@ -92,7 +93,7 @@ export async function processMaterial(materialId: string, ownerId: string) {
     }
 
     const chunks = chunkMaterialPages(sourcePages);
-    const embeddings = await embedDocuments(chunks.map((chunk) => chunk.content));
+    const embeddings = await embedDocuments(chunks.map((chunk) => chunk.content), { ownerId, requestId: reservationId, reservationId });
 
     try {
       // Neon HTTP cannot run interactive transaction callbacks. Build every
@@ -140,5 +141,8 @@ export async function processMaterial(materialId: string, ownerId: string) {
     await db.update(materials).set({ status: "failed", processingError: message, updatedAt: new Date() })
       .where(and(eq(materials.id, materialId), eq(materials.ownerId, ownerId)));
     throw new MaterialProcessingError(message, { cause: error });
+  } finally {
+    try { await releaseUnusedQuota(reservationId, ownerId); }
+    catch { console.error("Ingestion quota cleanup failed", { reservationId }); }
   }
 }

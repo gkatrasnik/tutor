@@ -35,8 +35,8 @@ function embeddingFailure(error, operation) {
 }
 
 // Shared by the server-only application wrapper and the administrative CLI.
-/** @param {{ model: string, dimensions: number }} config */
-export function createEmbeddingClient({ model, dimensions }) {
+/** @param {{ model: string, dimensions: number, execute?: <T>(call: () => Promise<T>) => Promise<T> }} config */
+export function createEmbeddingClient({ model, dimensions, execute = (call) => call() }) {
   return {
     /** @param {string[]} values @param {AbortSignal} [signal] */
     async embedDocuments(values, signal) {
@@ -46,8 +46,8 @@ export function createEmbeddingClient({ model, dimensions }) {
         const providerOptions = embeddingProviderOptions(model, dimensions, "search_document");
         for (let start = 0; start < values.length; start += EMBEDDING_BATCH_SIZE) {
           const batch = values.slice(start, start + EMBEDDING_BATCH_SIZE);
-          const result = await embedMany({ model, values: batch, providerOptions,
-            maxParallelCalls: 1, maxRetries: 0, abortSignal: signal ?? AbortSignal.timeout(60_000) });
+          const result = await execute(() => embedMany({ model, values: batch, providerOptions,
+            maxParallelCalls: 1, maxRetries: 0, abortSignal: signal ?? AbortSignal.timeout(60_000) }));
           if (result.embeddings.length !== batch.length) throw new EmbeddingError("The embedding provider returned an incomplete batch.");
           embeddings.push(...result.embeddings.map((value) => validateEmbedding(value, dimensions)));
         }
@@ -57,9 +57,9 @@ export function createEmbeddingClient({ model, dimensions }) {
     /** @param {string} value @param {AbortSignal} [signal] */
     async embedQuery(value, signal) {
       try {
-        const result = await embed({ model, value,
+        const result = await execute(() => embed({ model, value,
           providerOptions: embeddingProviderOptions(model, dimensions, "search_query"),
-          maxRetries: 0, abortSignal: signal ?? AbortSignal.timeout(60_000) });
+          maxRetries: 0, abortSignal: signal ?? AbortSignal.timeout(60_000) }));
         return validateEmbedding(result.embedding, dimensions);
       } catch (error) { throw embeddingFailure(error, "run retrieval"); }
     },

@@ -12,7 +12,10 @@ import { Label } from "@/components/ui/label";
 import { db } from "@/db";
 import { materials } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
-import { retrieveMaterialChunks } from "@/lib/rag/retrieval";
+import { retrieveMaterialChunks, type RetrievalResult } from "@/lib/rag/retrieval";
+import { EmbeddingError } from "@/lib/rag/embeddings";
+import { AiLimitError } from "@/lib/usage/contracts";
+import { enforceAiRateLimit } from "@/lib/usage/rate-limit";
 
 const idSchema = z.uuid();
 const querySchema = z.string().trim().min(1).max(500);
@@ -43,9 +46,16 @@ export default async function RetrievalInspectorPage({
   const rawQuery = (await searchParams).query;
   const parsedQuery = querySchema.safeParse(Array.isArray(rawQuery) ? rawQuery[0] : rawQuery);
   const query = parsedQuery.success ? parsedQuery.data : "";
-  const results = query && material.status === "ready"
-    ? await retrieveMaterialChunks({ ownerId: user.id, materialId: material.id, query })
-    : [];
+  let results: RetrievalResult[] = [];
+  let retrievalError: string | null = null;
+  if (query && material.status === "ready") {
+    try {
+      await enforceAiRateLimit(user.id);
+      results = await retrieveMaterialChunks({ ownerId: user.id, materialId: material.id, query });
+    } catch (error) {
+      retrievalError = error instanceof AiLimitError || error instanceof EmbeddingError ? error.message : "Retrieval failed. Please try again.";
+    }
+  }
 
   return (
     <main className="mx-auto max-w-5xl p-5 sm:p-8 lg:p-10">
@@ -76,6 +86,7 @@ export default async function RetrievalInspectorPage({
       </Card>
 
       {rawQuery && !parsedQuery.success ? <p className="mt-4 text-sm text-red-700">Enter a query between 1 and 500 characters.</p> : null}
+      {retrievalError ? <p role="alert" className="mt-4 text-sm text-red-700">{retrievalError}</p> : null}
       {material.status !== "ready" ? <p className="mt-4 text-sm text-amber-700">This material must finish processing before retrieval can run.</p> : null}
 
       {query ? (
