@@ -15,20 +15,25 @@ import {
 export async function generateCourseOutline(source: CourseSource, context: AiContext, model: LanguageModel = env.TUTOR_MODEL) {
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      return await recordGateway(context, "outline", typeof model === "string" ? model : model.modelId, async (span) => {
-        const result = await generateText({
-          model,
-          reasoning: "none",
-          maxOutputTokens: COURSE_OUTPUT_TOKENS,
-          maxRetries: 0,
-          onStepEnd: (step) => { span.observe(step); },
-          abortSignal: AbortSignal.timeout(COURSE_ATTEMPT_TIMEOUT_MS),
-          output: Output.object({ schema: courseOutlineSchema, name: "course_outline" }),
-          system: COURSE_SYSTEM_PROMPT,
-          prompt: buildCoursePrompt(source, attempt > 0),
-        });
-        span.observe(result);
-        return courseOutlineSchema.parse(result.output);
+      return await recordGateway({
+        context,
+        feature: "outline",
+        model: typeof model === "string" ? model : model.modelId,
+        run: async (recorder) => {
+          const result = await generateText({
+            model,
+            reasoning: "none",
+            maxOutputTokens: COURSE_OUTPUT_TOKENS,
+            maxRetries: 0,
+            onStepEnd: recorder.recordMetrics,
+            abortSignal: AbortSignal.timeout(COURSE_ATTEMPT_TIMEOUT_MS),
+            output: Output.object({ schema: courseOutlineSchema, name: "course_outline" }),
+            system: COURSE_SYSTEM_PROMPT,
+            prompt: buildCoursePrompt(source, attempt > 0),
+          });
+          recorder.recordMetrics(result);
+          return courseOutlineSchema.parse(result.output);
+        },
       });
     } catch (error) {
       const invalidOutput = NoObjectGeneratedError.isInstance(error) || error instanceof z.ZodError;

@@ -103,7 +103,9 @@ describe("Gateway usage ledger", () => {
     const value = { usage: { inputTokens: 100, outputTokens: 20, totalTokens: 120,
       inputTokenDetails: { cacheReadTokens: 40 }, outputTokenDetails: { reasoningTokens: 5 } },
     providerMetadata: { gateway: { cost: "0.000001234567890123", generationId: "gateway-123" } } };
-    await recordGateway(context(), "assessment", "test/model", async (span) => { span.observe(value); span.firstToken(); return "ok"; });
+    await recordGateway({ context: context(), feature: "assessment", model: "test/model", run: async (recorder) => {
+      recorder.recordMetrics(value); recorder.markFirstToken(); return "ok";
+    } });
     const row = (await pg.query<{ latency_ms: number; time_to_first_token_ms: number }>("SELECT * FROM ai_usage_events")).rows[0];
     expect(row).toMatchObject({ status: "success", input_tokens: 100, output_tokens: 20, total_tokens: 120,
       cached_tokens: 40, reasoning_tokens: 5, cost_usd: "0.000001234567890123", gateway_generation_id: "gateway-123" });
@@ -111,32 +113,32 @@ describe("Gateway usage ledger", () => {
   });
   it("records failures without leaking prompt text and keeps unknown cost nullable", async () => {
     const cause = Object.assign(new Error("secret text and private Blob URL"), { statusCode: 429 });
-    await expect(recordGateway(context(), "embedding", "model", async () => { throw cause; })).rejects.toBe(cause);
+    await expect(recordGateway({ context: context(), feature: "embedding", model: "model", run: async () => { throw cause; } })).rejects.toBe(cause);
     const row = (await pg.query("SELECT * FROM ai_usage_events")).rows[0];
     expect(row).toMatchObject({ status: "failure", error_code: "provider_rate_limit", cost_usd: null, total_tokens: null });
     expect(JSON.stringify(row)).not.toContain("secret");
   });
   it("marks a reservation started before provider work and refuses unlogged spend", async () => {
     const ctx = { ...context(), reservationId: await reserveDailyQuota("owner", "ingestion") };
-    await recordGateway(ctx, "embedding", "model", async () => {
+    await recordGateway({ context: ctx, feature: "embedding", model: "model", run: async () => {
       expect((await pg.query("SELECT state FROM ai_quota_reservations")).rows[0]).toEqual({ state: "started" });
-    });
+    } });
     const operation = vi.fn();
     mocks.query.mockRejectedValueOnce(new Error("database unavailable"));
-    await expect(recordGateway(context(), "tutor", "model", operation)).rejects.toThrow();
+    await expect(recordGateway({ context: context(), feature: "tutor", model: "model", run: operation })).rejects.toThrow();
     expect(operation).not.toHaveBeenCalled();
   });
   it("requires the dedicated Gateway key rather than silently using deployment OIDC", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "");
     const operation = vi.fn();
-    await expect(recordGateway(context(), "tutor", "model", operation)).rejects.toThrow("dedicated AI_GATEWAY_API_KEY");
+    await expect(recordGateway({ context: context(), feature: "tutor", model: "model", run: operation })).rejects.toThrow("dedicated AI_GATEWAY_API_KEY");
     expect(operation).not.toHaveBeenCalled(); expect(mocks.query).not.toHaveBeenCalled();
   });
   it("keeps the pending record if finalization fails, without repeating the provider operation", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       const operation = vi.fn(async () => { mocks.query.mockRejectedValueOnce(new Error("database unavailable")); return "answer"; });
-      expect(await recordGateway(context(), "tutor", "model", operation)).toBe("answer");
+      expect(await recordGateway({ context: context(), feature: "tutor", model: "model", run: operation })).toBe("answer");
       expect(operation).toHaveBeenCalledTimes(1);
       expect((await pg.query("SELECT status FROM ai_usage_events")).rows[0]).toEqual({ status: "pending" });
     } finally { log.mockRestore(); }

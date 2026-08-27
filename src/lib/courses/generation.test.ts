@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/env", () => ({ env: { TUTOR_MODEL: "alibaba/qwen3.7-flash" } }));
-vi.mock("@/lib/usage/gateway", () => ({ recordGateway: async (_context: unknown, _feature: string, _model: string, operation: (span: { observe: () => void }) => Promise<unknown>) => operation({ observe() {} }) }));
+vi.mock("@/lib/usage/gateway", () => ({ recordGateway: async ({ run }: { run: (recorder: { recordMetrics: () => void }) => Promise<unknown> }) => run({ recordMetrics() {} }) }));
 
 import { generateCourseOutline } from "./generation";
 import { outlineFixture, sourceFixture } from "./fixtures.test-support";

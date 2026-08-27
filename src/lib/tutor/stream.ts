@@ -31,27 +31,32 @@ export function streamTutorTurn(turn: PreparedTurn, model: LanguageModel = env.T
         content = "I couldn't find supporting passages in the course material. Which part of the lesson would you like to explore once the sources are indexed?";
         emit({ type: "delta", text: content });
       } else {
-        await recordGateway(usage, "tutor", typeof model === "string" ? model : model.modelId, async (span) => {
-          const result = streamText({ model, reasoning: "minimal", maxOutputTokens: TUTOR_OUTPUT_TOKENS,
-            maxRetries: 0, abortSignal: signal, system: TUTOR_SYSTEM_PROMPT,
-            // The ledger records safe error codes. Suppress the SDK's raw-error logger.
-            onError() {},
-            messages: [{ role: "user", content: tutorContext(turn.session, sources) }, ...turn.history, { role: "user", content: turn.message }],
-          });
-          let finished = false;
-          for await (const part of result.fullStream) {
-            if (part.type === "text-delta") { span.firstToken(); content += part.text; emit({ type: "delta", text: part.text }); }
-            if (part.type === "reasoning-delta") span.firstToken();
-            if (part.type === "finish-step") span.observe(part);
-            if (part.type === "error") throw part.error;
-            if (part.type === "abort") throw new DOMException("Generation aborted", "AbortError");
-            if (part.type === "finish") {
-              // Truncated/filtered answers are not presented as completed lessons.
-              finished = part.finishReason === "stop";
-              span.observe({ usage: part.totalUsage });
+        await recordGateway({
+          context: usage,
+          feature: "tutor",
+          model: typeof model === "string" ? model : model.modelId,
+          run: async (recorder) => {
+            const result = streamText({ model, reasoning: "minimal", maxOutputTokens: TUTOR_OUTPUT_TOKENS,
+              maxRetries: 0, abortSignal: signal, system: TUTOR_SYSTEM_PROMPT,
+              // The ledger records safe error codes. Suppress the SDK's raw-error logger.
+              onError() {},
+              messages: [{ role: "user", content: tutorContext(turn.session, sources) }, ...turn.history, { role: "user", content: turn.message }],
+            });
+            let finished = false;
+            for await (const part of result.fullStream) {
+              if (part.type === "text-delta") { recorder.markFirstToken(); content += part.text; emit({ type: "delta", text: part.text }); }
+              if (part.type === "reasoning-delta") recorder.markFirstToken();
+              if (part.type === "finish-step") recorder.recordMetrics(part);
+              if (part.type === "error") throw part.error;
+              if (part.type === "abort") throw new DOMException("Generation aborted", "AbortError");
+              if (part.type === "finish") {
+                // Truncated/filtered answers are not presented as completed lessons.
+                finished = part.finishReason === "stop";
+                recorder.recordMetrics({ usage: part.totalUsage });
+              }
             }
-          }
-          if (!finished || !content.trim()) throw new Error("Incomplete tutor response");
+            if (!finished || !content.trim()) throw new Error("Incomplete tutor response");
+          },
         });
       }
       await completeTutorTurn(turn, content, sources.map((source) => source.id));

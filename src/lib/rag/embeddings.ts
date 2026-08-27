@@ -9,10 +9,15 @@ export { EmbeddingError } from "./embedding-client.mjs";
 
 function client(context: AiContext) {
   return createEmbeddingClient({ model: env.EMBEDDING_MODEL, dimensions: env.EMBEDDING_DIMENSION,
-    execute: (call) => recordGateway(context, "embedding", env.EMBEDDING_MODEL, async (span) => {
-      const result = await call();
-      span.observe(result);
-      return result;
+    execute: (call) => recordGateway({
+      context,
+      feature: "embedding",
+      model: env.EMBEDDING_MODEL,
+      run: async (recorder) => {
+        const result = await call();
+        recorder.recordMetrics(result);
+        return result;
+      },
     }),
   });
 }

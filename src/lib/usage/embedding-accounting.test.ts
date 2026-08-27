@@ -11,14 +11,14 @@ const context = { ownerId: "owner", requestId: crypto.randomUUID(), reservationI
 const metadata = { gateway: { cost: "0.0001" } };
 beforeEach(() => {
   vi.resetAllMocks();
-  mocks.record.mockImplementation(async (_context, _feature, _model, operation) => operation({ observe: mocks.observe }));
+  mocks.record.mockImplementation(async ({ run }) => run({ recordMetrics: mocks.observe }));
   mocks.embed.mockResolvedValue({ embedding: Array(1536).fill(0.5), usage: { tokens: 2 }, providerMetadata: metadata });
   mocks.embedMany.mockImplementation(async ({ values }: { values: string[] }) => ({ embeddings: values.map(() => Array(1536).fill(0.5)), usage: { tokens: values.length }, providerMetadata: metadata }));
 });
 it("accounts separately for every document batch and propagates quota attribution", async () => {
   await embedDocuments(Array(51).fill("source"), context);
   expect(mocks.record).toHaveBeenCalledTimes(2);
-  for (const args of mocks.record.mock.calls) expect(args.slice(0, 3)).toEqual([context, "embedding", "openai/text-embedding-3-small"]);
+  for (const [options] of mocks.record.mock.calls) expect(options).toMatchObject({ context, feature: "embedding", model: "openai/text-embedding-3-small" });
   expect(mocks.observe.mock.calls.map(([value]) => value.usage.tokens)).toEqual([50, 1]);
 });
 it("accounts for query embeddings and forwards cancellation", async () => {

@@ -6,28 +6,51 @@ import { safeAiErrorCode, usageMetrics, type AiContext } from "./contracts";
 import { markQuotaStarted } from "./quotas";
 
 type Feature = typeof aiUsageEvents.$inferInsert.feature;
-export type GatewaySpan = { observe: (result: unknown) => void; firstToken: () => void };
+type Metrics = ReturnType<typeof usageMetrics>;
 
-export async function recordGateway<T>(context: AiContext, feature: Feature, model: string,
-  operation: (span: GatewaySpan) => Promise<T>): Promise<T> {
+type GatewayUsageRecorder = {
+  recordMetrics: (result: unknown) => void;
+  markFirstToken: () => void;
+};
+
+type RecordGatewayOptions<T> = {
+  context: AiContext;
+  feature: Feature;
+  model: string;
+  run: (recorder: GatewayUsageRecorder) => Promise<T>;
+};
+
+function mergeKnownMetrics(current: Metrics, result: unknown): Metrics {
+  const next = usageMetrics(result);
+  return {
+    inputTokens: next.inputTokens ?? current.inputTokens,
+    outputTokens: next.outputTokens ?? current.outputTokens,
+    cachedTokens: next.cachedTokens ?? current.cachedTokens,
+    reasoningTokens: next.reasoningTokens ?? current.reasoningTokens,
+    totalTokens: next.totalTokens ?? current.totalTokens,
+    costUsd: next.costUsd ?? current.costUsd,
+    gatewayGenerationId: next.gatewayGenerationId ?? current.gatewayGenerationId,
+  };
+}
+
+export async function recordGateway<T>({ context, feature, model, run }: RecordGatewayOptions<T>): Promise<T> {
   if (!process.env.AI_GATEWAY_API_KEY?.trim()) throw new Error("A dedicated AI_GATEWAY_API_KEY is required for budget-controlled AI requests.");
   const id = crypto.randomUUID();
   // Fail closed before AI spend if the durable pending record cannot be created.
   await db.insert(aiUsageEvents).values({ id, ownerId: context.ownerId, requestId: context.requestId, feature, model });
-  let started = performance.now();
-  let firstToken: number | null = null;
+  let operationStartedAt = performance.now();
+  let timeToFirstTokenMs: number | null = null;
   let metrics = usageMetrics(undefined);
-  const span: GatewaySpan = {
-    observe(result) {
-      const next = usageMetrics(result);
-      metrics = Object.fromEntries(Object.entries(metrics).map(([key, value]) => [key, next[key as keyof typeof next] ?? value])) as typeof metrics;
+  const recorder: GatewayUsageRecorder = {
+    recordMetrics: (result) => { metrics = mergeKnownMetrics(metrics, result); },
+    markFirstToken: () => {
+      timeToFirstTokenMs ??= Math.round(performance.now() - operationStartedAt);
     },
-    firstToken() { firstToken ??= Math.round(performance.now() - started); },
   };
-  async function finish(status: "success" | "failure", errorCode: string | null) {
+  async function finalizeUsageEvent(status: "success" | "failure", errorCode: string | null) {
     try {
       await db.update(aiUsageEvents).set({ ...metrics, status, errorCode,
-        latencyMs: Math.round(performance.now() - started), timeToFirstTokenMs: firstToken })
+        latencyMs: Math.round(performance.now() - operationStartedAt), timeToFirstTokenMs })
         .where(and(eq(aiUsageEvents.id, id), eq(aiUsageEvents.ownerId, context.ownerId), eq(aiUsageEvents.status, "pending")));
     } catch {
       // Preserve the pending event for reconciliation. Never retry billable work
@@ -37,13 +60,13 @@ export async function recordGateway<T>(context: AiContext, feature: Feature, mod
   }
   try {
     if (context.reservationId) await markQuotaStarted(context.reservationId, context.ownerId);
-    started = performance.now();
-    const result = await operation(span);
-    await finish("success", null);
+    operationStartedAt = performance.now();
+    const result = await run(recorder);
+    await finalizeUsageEvent("success", null);
     return result;
   } catch (error) {
-    span.observe(error);
-    await finish("failure", safeAiErrorCode(error));
+    recorder.recordMetrics(error);
+    await finalizeUsageEvent("failure", safeAiErrorCode(error));
     throw error;
   }
 }
