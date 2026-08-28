@@ -135,7 +135,7 @@ export function LessonAssessment({
   }
 
   return (
-    <Card className="mt-8 bg-white">
+    <Card className="mt-8 bg-card">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle>Lesson assessment</CardTitle>
@@ -153,13 +153,13 @@ export function LessonAssessment({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <p className="text-sm text-stone-600">
+        <p className="text-sm text-muted-foreground">
           This reviews your own answers from the latest 20 messages in completed
           exchanges. It is an AI estimate, not a formal exam. Keep practicing
           and finish again to save a new attempt.
         </p>
         {!eligible && !readOnly ? (
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-muted-foreground">
             First complete at least two exchanges with the tutor, including an
             explanation in your own words.
           </p>
@@ -184,23 +184,23 @@ export function LessonAssessment({
           </Button>
         </div>
         {busy ? (
-          <p role="status" className="text-sm text-stone-500">
+          <p role="status" className="text-sm text-muted-foreground">
             Checking the saved conversation against your course sources. Keep
             this page open.
           </p>
         ) : null}
         {notice ? (
-          <p role="status" className="text-sm text-emerald-700">
+          <p role="status" className="text-sm text-primary">
             {notice}
           </p>
         ) : null}
         {error ? (
-          <p role="alert" className="text-sm text-red-700">
+          <p role="alert" className="text-sm text-destructive">
             {error}
           </p>
         ) : null}
         {!history.items.length ? (
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-muted-foreground">
             No assessments yet. Chatting alone does not mark this lesson
             complete.
           </p>
@@ -256,13 +256,13 @@ export function LessonAssessment({
                           <h4 className="font-semibold">
                             Recommended next step
                           </h4>
-                          <p className="mt-1 whitespace-pre-wrap break-words leading-6 text-stone-600">
+                          <p className="mt-1 whitespace-pre-wrap break-words leading-6 text-muted-foreground">
                             {item.nextStep}
                           </p>
                         </div>
                       </>
                     ) : (
-                      <p className="text-stone-600">
+                      <p className="text-muted-foreground">
                         {item.error ??
                           (active
                             ? "Assessment in progress. Refresh shortly."
@@ -319,7 +319,7 @@ function Feedback({
     <div>
       <h4 className="font-semibold">{title}</h4>
       {items.length ? (
-        <ul className="mt-1 list-disc space-y-1 pl-5 leading-6 text-stone-600">
+        <ul className="mt-1 list-disc space-y-1 pl-5 leading-6 text-muted-foreground">
           {items.map((text, index) => (
             <li key={index} className="break-words">
               {text}
@@ -327,7 +327,7 @@ function Feedback({
           ))}
         </ul>
       ) : (
-        <p className="mt-1 text-stone-500">{empty}</p>
+        <p className="mt-1 text-muted-foreground">{empty}</p>
       )}
     </div>
   );

@@ -28,7 +28,7 @@ export function Pagination({
       >
         Previous
       </Link>
-      <span className="text-sm text-stone-500">
+      <span className="text-sm text-muted-foreground">
         Page {page} of {pageCount}
       </span>
       <Link

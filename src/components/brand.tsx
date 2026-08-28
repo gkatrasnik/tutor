@@ -19,7 +19,7 @@ export function Brand({
       )}
       aria-label="Tutor home"
     >
-      <span className="flex size-8 items-center justify-center rounded-xl bg-emerald-700 text-white shadow-sm">
+      <span className="flex size-8 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
         <BookOpenText className="size-4" aria-hidden="true" />
       </span>
       <span>Tutor</span>

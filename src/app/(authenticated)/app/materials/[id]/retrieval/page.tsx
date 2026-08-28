@@ -79,22 +79,22 @@ export default async function RetrievalInspectorPage({
     <main className="mx-auto max-w-5xl p-5 sm:p-8 lg:p-10">
       <Link
         href={`/app/courses/${material.courseId}`}
-        className="inline-flex items-center gap-2 text-sm text-stone-600 hover:text-stone-950"
+        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden="true" /> Back to course
       </Link>
 
       <div className="mt-6">
-        <p className="text-sm font-medium text-emerald-700">Admin tool</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-stone-950">
+        <p className="text-sm font-medium text-primary">Admin tool</p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
           Retrieval inspector
         </h1>
-        <p className="mt-2 text-stone-500">
+        <p className="mt-2 text-muted-foreground">
           See the six semantic chunks Tutor retrieves from “{material.title}”.
         </p>
       </div>
 
-      <Card className="mt-8 border-stone-200 bg-white">
+      <Card className="mt-8 border-border bg-card">
         <CardHeader>
           <CardTitle>Test a learner query</CardTitle>
           <CardDescription>
@@ -126,17 +126,17 @@ export default async function RetrievalInspectorPage({
       </Card>
 
       {rawQuery && !parsedQuery.success ? (
-        <p className="mt-4 text-sm text-red-700">
+        <p className="mt-4 text-sm text-destructive">
           Enter a query between 1 and 500 characters.
         </p>
       ) : null}
       {retrievalError ? (
-        <p role="alert" className="mt-4 text-sm text-red-700">
+        <p role="alert" className="mt-4 text-sm text-destructive">
           {retrievalError}
         </p>
       ) : null}
       {material.status !== "ready" ? (
-        <p className="mt-4 text-sm text-amber-700">
+        <p className="mt-4 text-sm text-warning">
           This material must finish processing before retrieval can run.
         </p>
       ) : null}
@@ -151,7 +151,7 @@ export default async function RetrievalInspectorPage({
           </div>
           <div className="grid gap-4">
             {results.map((result, index) => (
-              <Card key={result.id} className="border-stone-200 bg-white">
+              <Card key={result.id} className="border-border bg-card">
                 <CardHeader>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge>{index + 1}</Badge>
@@ -163,13 +163,13 @@ export default async function RetrievalInspectorPage({
                         ? `Page ${result.pageNumber}`
                         : "Pasted text"}
                     </Badge>
-                    <span className="text-xs text-stone-500">
+                    <span className="text-xs text-muted-foreground">
                       Chunk {result.ordinal + 1}
                     </span>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="whitespace-pre-wrap text-sm leading-6 text-stone-700">
+                  <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/80">
                     {result.content}
                   </p>
                 </CardContent>

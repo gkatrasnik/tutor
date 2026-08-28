@@ -10,7 +10,7 @@ export default function AdminError({
   retry: () => void;
 }) {
   return (
-    <main className="min-h-screen bg-stone-50 p-5 sm:p-8 lg:p-10">
+    <main className="min-h-screen bg-muted/50 p-5 sm:p-8 lg:p-10">
       <ErrorFallback
         title="Administration data is unavailable"
         description="No settings were changed. Retry the read-only analytics query or return to the learner app."

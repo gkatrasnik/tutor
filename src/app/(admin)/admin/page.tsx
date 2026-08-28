@@ -17,6 +17,7 @@ import {
 } from "@/components/analytics/format";
 import { Pagination } from "@/components/analytics/pagination";
 import { Brand } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -70,7 +71,7 @@ const requestSortLabels = {
 } as const;
 
 const selectClassName =
-  "h-9 w-full rounded-lg border border-input bg-white px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  "h-9 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const query = await searchParams;
@@ -126,11 +127,12 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   ];
 
   return (
-    <main className="min-h-screen bg-stone-50">
-      <header className="border-b bg-white">
+    <main className="min-h-screen bg-muted/50">
+      <header className="border-b bg-card">
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between px-5">
           <Brand />
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <Link
               href="/app"
               className={buttonVariants({ variant: "ghost", size: "sm" })}
@@ -147,13 +149,13 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
       <div className="mx-auto max-w-[90rem] px-5 py-8 sm:px-8 lg:px-10">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
-            <p className="text-sm font-medium text-emerald-700">
+            <p className="text-sm font-medium text-primary">
               Read-only administration
             </p>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight">
               AI operations
             </h1>
-            <p className="mt-2 text-stone-500">
+            <p className="mt-2 text-muted-foreground">
               Locally recorded Gateway usage for product monitoring and cost
               reconciliation.
             </p>
@@ -165,12 +167,12 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
             {activeTab === "requests" ? (
               <RequestFilterFields filters={requestFilters} />
             ) : null}
-            <label className="grid gap-1 text-xs font-medium text-stone-600">
+            <label className="grid gap-1 text-xs font-medium text-muted-foreground">
               Date range
               <select
                 name="range"
                 defaultValue={range}
-                className="h-9 min-w-40 rounded-lg border border-input bg-white px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-9 min-w-40 rounded-lg border border-input bg-card px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {analyticsRanges.map((value) => (
                   <option key={value} value={value}>
@@ -193,11 +195,11 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
             <Card key={card.label}>
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-sm text-stone-500">
+                  <CardTitle className="text-sm text-muted-foreground">
                     {card.label}
                   </CardTitle>
                   <card.icon
-                    className="size-4 text-emerald-700"
+                    className="size-4 text-primary"
                     aria-hidden="true"
                   />
                 </div>
@@ -206,7 +208,9 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                 <p className="text-2xl font-semibold tabular-nums">
                   {card.value}
                 </p>
-                <p className="mt-1 text-xs text-stone-500">{card.detail}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {card.detail}
+                </p>
               </CardContent>
             </Card>
           ))}
@@ -330,11 +334,11 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
 
           <TabsContent value="requests" className="mt-5 space-y-5">
             {analytics.failures.length ? (
-              <Card className="border-red-200 bg-red-50/40">
+              <Card className="border-destructive/20 bg-destructive/5">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <TriangleAlert
-                      className="size-4 text-red-700"
+                      className="size-4 text-destructive"
                       aria-hidden="true"
                     />
                     Recent failures
@@ -358,7 +362,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                             {failure.model}
                           </span>
                         </span>
-                        <span className="text-stone-500">
+                        <span className="text-muted-foreground">
                           {failure.errorCode ?? "unknown failure"} ·{" "}
                           {formatTimestamp(failure.createdAt)}
                         </span>
@@ -374,11 +378,11 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
             >
               <form
                 action="/admin"
-                className="mb-5 grid gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4 md:grid-cols-2 xl:grid-cols-5"
+                className="mb-5 grid gap-3 rounded-xl border border-border bg-muted/50 p-4 md:grid-cols-2 xl:grid-cols-5"
               >
                 <input type="hidden" name="range" value={range} />
                 <input type="hidden" name="tab" value="requests" />
-                <label className="grid gap-1 text-xs font-medium text-stone-600">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                   User email
                   <Input
                     key={`user-${requestFilters.user}`}
@@ -389,7 +393,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                     maxLength={200}
                   />
                 </label>
-                <label className="grid gap-1 text-xs font-medium text-stone-600">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                   Model
                   <Input
                     key={`model-${requestFilters.model}`}
@@ -400,7 +404,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                     maxLength={200}
                   />
                 </label>
-                <label className="grid gap-1 text-xs font-medium text-stone-600">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                   Feature
                   <select
                     name="feature"
@@ -415,7 +419,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                     ))}
                   </select>
                 </label>
-                <label className="grid gap-1 text-xs font-medium text-stone-600">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                   Status
                   <select
                     name="status"
@@ -430,7 +434,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                     ))}
                   </select>
                 </label>
-                <label className="grid gap-1 text-xs font-medium text-stone-600">
+                <label className="grid gap-1 text-xs font-medium text-muted-foreground">
                   Sort by
                   <select
                     name="sort"
@@ -531,7 +535,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                     <TableRow>
                       <TableCell
                         colSpan={12}
-                        className="h-24 text-center text-stone-500"
+                        className="h-24 text-center text-muted-foreground"
                       >
                         No requests match these filters.
                       </TableCell>

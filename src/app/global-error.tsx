@@ -13,18 +13,20 @@ export default function GlobalError({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-stone-50 text-stone-950 antialiased">
+      <body className="min-h-screen bg-muted/50 text-foreground antialiased">
         <main className="flex min-h-screen items-center justify-center p-5">
-          <div className="w-full max-w-md rounded-xl border border-stone-200 bg-white p-6 shadow-sm">
+          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-sm">
             <title>Something went wrong | Tutor</title>
-            <p className="text-sm font-medium text-red-700">Unexpected error</p>
+            <p className="text-sm font-medium text-destructive">
+              Unexpected error
+            </p>
             <h1 className="mt-2 text-2xl font-semibold">Tutor couldn’t load</h1>
-            <p className="mt-2 text-sm leading-6 text-stone-600">
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Try again. If the problem continues, return to the home page and
               start a new navigation.
             </p>
             {error.digest ? (
-              <p className="mt-3 text-xs text-stone-500">
+              <p className="mt-3 text-xs text-muted-foreground">
                 Reference: <code>{error.digest}</code>
               </p>
             ) : null}
@@ -32,13 +34,13 @@ export default function GlobalError({
               <button
                 type="button"
                 onClick={() => retry()}
-                className="inline-flex h-8 items-center justify-center rounded-lg bg-emerald-700 px-3 text-sm font-medium text-white hover:bg-emerald-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700"
+                className="inline-flex h-8 items-center justify-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 Try again
               </button>
               <Link
                 href="/"
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-stone-200 px-3 text-sm font-medium hover:bg-stone-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-stone-700"
+                className="inline-flex h-8 items-center justify-center rounded-lg border border-border px-3 text-sm font-medium hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 Return home
               </Link>

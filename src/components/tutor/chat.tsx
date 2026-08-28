@@ -110,12 +110,12 @@ export function TutorChat({
   return (
     <div className="mt-6 space-y-5">
       {readOnly ? (
-        <p className="rounded-xl border bg-amber-50 p-4 text-sm">
+        <p className="rounded-xl border bg-warning/10 p-4 text-sm">
           This conversation is read-only because its course sources or outline
           changed. Open the course to start a current lesson.
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-stone-500">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>
           Saved conversation · Latest 100 messages · 30 tutor turns per UTC day
         </span>
@@ -135,7 +135,7 @@ export function TutorChat({
       {!messages.length && !busy ? (
         <Card>
           <CardContent className="space-y-3 p-5">
-            <p className="text-sm leading-6 text-stone-600">
+            <p className="text-sm leading-6 text-muted-foreground">
               Your tutor will introduce one idea at a time and help you reason
               through it. You can ask a question or start with a short
               introduction.
@@ -158,21 +158,21 @@ export function TutorChat({
           <Card
             key={message.id}
             className={
-              message.role === "user" ? "ml-6 bg-emerald-50" : "mr-6 bg-white"
+              message.role === "user" ? "ml-6 bg-primary/5" : "mr-6 bg-card"
             }
           >
             <CardContent className="p-5">
-              <p className="mb-2 text-xs font-semibold text-stone-500">
+              <p className="mb-2 text-xs font-semibold text-muted-foreground">
                 {message.role === "user" ? "You" : "Tutor"}
               </p>
               <p className="whitespace-pre-wrap break-words leading-7">
                 {message.content}
               </p>
               {message.status === "failed" ? (
-                <p className="text-sm text-red-700">{message.error}</p>
+                <p className="text-sm text-destructive">{message.error}</p>
               ) : null}
               {message.status === "pending" ? (
-                <p className="text-sm text-stone-500">
+                <p className="text-sm text-muted-foreground">
                   {active
                     ? "Response is processing. Refresh shortly."
                     : "This response was interrupted. You can send your question again."}
@@ -192,14 +192,14 @@ export function TutorChat({
         ))}
         {busy ? (
           <>
-            <Card className="ml-6 bg-emerald-50">
+            <Card className="ml-6 bg-primary/5">
               <CardContent className="whitespace-pre-wrap break-words p-5">
                 {question}
               </CardContent>
             </Card>
             <Card className="mr-6">
               <CardContent className="p-5">
-                <p className="mb-2 text-xs text-stone-500" role="status">
+                <p className="mb-2 text-xs text-muted-foreground" role="status">
                   Tutor is responding… Not saved yet.
                 </p>
                 <p className="whitespace-pre-wrap break-words leading-7">
@@ -214,13 +214,13 @@ export function TutorChat({
       {error ? (
         <p
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          className="rounded-lg border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive"
         >
           {error}
         </p>
       ) : null}
       {active && !busy ? (
-        <p role="status" className="text-sm text-stone-500">
+        <p role="status" className="text-sm text-muted-foreground">
           A response or assessment is running. Refresh shortly; interrupted
           attempts unlock after two minutes.
         </p>
@@ -237,7 +237,7 @@ export function TutorChat({
           className="min-h-28"
         />
         <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-muted-foreground">
             {draft.length}/2,000 · Source-grounded AI can still make mistakes.
           </p>
           <Button

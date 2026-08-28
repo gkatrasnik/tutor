@@ -163,7 +163,7 @@ export function MaterialUploader({
                 accept="application/pdf,.pdf"
                 disabled={busy}
               />
-              <p className="text-xs text-stone-500">
+              <p className="text-xs text-muted-foreground">
                 Up to 5 MB and 50 pages. Scanned image-only PDFs are not
                 supported yet.
               </p>
@@ -194,7 +194,7 @@ export function MaterialUploader({
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="material-text">Your text</Label>
-                <span className="text-xs tabular-nums text-stone-500">
+                <span className="text-xs tabular-nums text-muted-foreground">
                   {characterCount.toLocaleString()} /{" "}
                   {MAX_TEXT_CHARACTERS.toLocaleString()}
                 </span>
@@ -224,7 +224,7 @@ export function MaterialUploader({
       </Tabs>
       {busy ? (
         <div className="mt-5 space-y-2" aria-live="polite">
-          <div className="flex justify-between text-xs text-stone-500">
+          <div className="flex justify-between text-xs text-muted-foreground">
             <span>
               {progress >= 90
                 ? "Indexing your material…"
@@ -233,7 +233,7 @@ export function MaterialUploader({
             <span>{progress}%</span>
           </div>
           {progress >= 90 ? (
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-muted-foreground">
               This can take a few minutes. Keep this page open.
             </p>
           ) : null}

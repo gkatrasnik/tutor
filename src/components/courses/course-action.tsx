@@ -89,12 +89,12 @@ export function CourseAction({
                 : "Generate outline"}
       </Button>
       {busy ? (
-        <p className="text-xs text-stone-500" role="status">
+        <p className="text-xs text-muted-foreground" role="status">
           This can take up to two minutes. Keep this page open.
         </p>
       ) : null}
       {error ? (
-        <p className="text-sm text-red-700" role="alert">
+        <p className="text-sm text-destructive" role="alert">
           {error}
         </p>
       ) : null}

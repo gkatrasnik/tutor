@@ -70,13 +70,13 @@ export default async function CoursesPage() {
     <main className="mx-auto max-w-6xl p-5 sm:p-8 lg:p-10">
       <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
         <div>
-          <p className="text-sm font-medium text-emerald-700">
+          <p className="text-sm font-medium text-primary">
             Your learning space
           </p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-stone-950">
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
             Welcome back, {firstName}.
           </h1>
-          <p className="mt-2 text-stone-500">
+          <p className="mt-2 text-muted-foreground">
             Explore a learning path grounded in your own material.
           </p>
         </div>
@@ -86,12 +86,12 @@ export default async function CoursesPage() {
         aria-label="Daily quota remaining"
       >
         {quotaCards.map((quota) => (
-          <Card key={quota.label} className="bg-white">
+          <Card key={quota.label} className="bg-card">
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="flex items-center gap-2">
                   <quota.icon
-                    className="size-4 text-emerald-700"
+                    className="size-4 text-primary"
                     aria-hidden="true"
                   />
                   {quota.label}
@@ -112,7 +112,7 @@ export default async function CoursesPage() {
           </Card>
         ))}
       </section>
-      <Card className="mt-8 bg-white">
+      <Card className="mt-8 bg-card">
         <CardHeader>
           <CardTitle>Create a course</CardTitle>
           <CardDescription>
@@ -139,10 +139,10 @@ export default async function CoursesPage() {
         {library.length ? (
           <div className="grid gap-5 lg:grid-cols-2">
             {library.map((course) => (
-              <Card key={course.courseId} className="border-stone-200 bg-white">
+              <Card key={course.courseId} className="border-border bg-card">
                 <CardHeader>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="flex size-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800">
+                    <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                       <BookOpenText className="size-5" aria-hidden="true" />
                     </span>
                     <Badge
@@ -172,13 +172,13 @@ export default async function CoursesPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {course.summary ? (
-                    <p className="text-sm leading-6 text-stone-600">
+                    <p className="text-sm leading-6 text-muted-foreground">
                       {course.summary}
                     </p>
                   ) : null}
                   {course.status === "ready" ? (
                     <div className="space-y-2">
-                      <p className="text-xs text-stone-500">
+                      <p className="text-xs text-muted-foreground">
                         {progressByCourse.get(course.courseId)!.completed} of{" "}
                         {progressByCourse.get(course.courseId)!.total} lessons
                         completed ·{" "}
@@ -190,7 +190,7 @@ export default async function CoursesPage() {
                       />
                     </div>
                   ) : (
-                    <p className="text-sm text-stone-500">
+                    <p className="text-sm text-muted-foreground">
                       {course.error ??
                         (course.status === "generating"
                           ? "Your outline is being prepared. Open the course to check its progress."
@@ -211,10 +211,10 @@ export default async function CoursesPage() {
             ))}
           </div>
         ) : (
-          <Card className="border-dashed border-stone-300 bg-transparent shadow-none">
+          <Card className="border-dashed border-border bg-transparent shadow-none">
             <CardContent className="px-6 py-10 text-center">
               <h3 className="font-semibold">Create your first course above</h3>
-              <p className="mt-2 text-sm text-stone-500">
+              <p className="mt-2 text-sm text-muted-foreground">
                 Each course can bring together several PDFs and sets of notes.
               </p>
             </CardContent>

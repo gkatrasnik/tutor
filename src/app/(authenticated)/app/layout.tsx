@@ -1,5 +1,6 @@
 import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { isAdminEmail } from "@/lib/auth/authorization";
 import { requireUser } from "@/lib/auth/dal";
 import { env } from "@/lib/env";
@@ -19,16 +20,19 @@ export default async function AppLayout({
     .join("");
 
   return (
-    <div className="min-h-screen bg-stone-50">
-      <header className="sticky top-0 z-30 border-b bg-white/90 backdrop-blur">
+    <div className="min-h-screen bg-muted/50">
+      <header className="sticky top-0 z-30 border-b bg-card/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between px-4 sm:px-6">
           <Brand href="/app" />
-          <AccountMenu
-            displayName={displayName}
-            email={user.email}
-            initials={initials}
-            showAdmin={showAdmin}
-          />
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <AccountMenu
+              displayName={displayName}
+              email={user.email}
+              initials={initials}
+              showAdmin={showAdmin}
+            />
+          </div>
         </div>
       </header>
       {children}

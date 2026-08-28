@@ -28,9 +28,9 @@ export function ErrorFallback({
   returnLabel: string;
 }) {
   return (
-    <Card className="mx-auto max-w-lg bg-white" role="alert">
+    <Card className="mx-auto max-w-lg bg-card" role="alert">
       <CardHeader>
-        <span className="mb-2 flex size-10 items-center justify-center rounded-xl bg-red-50 text-red-700">
+        <span className="mb-2 flex size-10 items-center justify-center rounded-xl bg-destructive/10 text-destructive">
           <TriangleAlert className="size-5" aria-hidden="true" />
         </span>
         <CardTitle>
@@ -40,7 +40,7 @@ export function ErrorFallback({
       </CardHeader>
       <CardContent>
         {error.digest ? (
-          <p className="mb-4 text-xs text-stone-500">
+          <p className="mb-4 text-xs text-muted-foreground">
             Reference: <code>{error.digest}</code>
           </p>
         ) : null}

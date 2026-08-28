@@ -2,6 +2,7 @@ import { ArrowLeft, LockKeyhole, MailCheck } from "lucide-react";
 import Link from "next/link";
 
 import { Brand } from "@/components/brand";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Card,
@@ -21,23 +22,26 @@ export default async function SignInPage({
   const { error } = await searchParams;
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#fbfcf9] px-5 py-12">
-      <div className="pointer-events-none absolute -left-40 top-0 size-[30rem] rounded-full bg-emerald-100/70 blur-3xl" />
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-5 py-12">
+      <div className="pointer-events-none absolute -left-40 top-0 size-[30rem] rounded-full bg-primary/10 blur-3xl" />
       <div className="relative z-10 w-full max-w-md">
         <div className="mb-8 flex items-center justify-between">
           <Brand className="text-lg" />
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1.5 text-sm text-stone-500 hover:text-stone-900"
-          >
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            Home
-          </Link>
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              Home
+            </Link>
+          </div>
         </div>
 
-        <Card className="border-stone-200 bg-white shadow-[0_24px_80px_-32px_rgba(28,44,36,0.3)]">
+        <Card className="border-border bg-card shadow-2xl">
           <CardHeader className="text-center">
-            <span className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-800">
+            <span className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <MailCheck className="size-5" aria-hidden="true" />
             </span>
             <CardTitle className="text-2xl tracking-tight">
@@ -57,9 +61,9 @@ export default async function SignInPage({
               </Alert>
             )}
             <SignInForm />
-            <div className="flex items-start gap-2 border-t pt-5 text-xs leading-5 text-stone-500">
+            <div className="flex items-start gap-2 border-t pt-5 text-xs leading-5 text-muted-foreground">
               <LockKeyhole
-                className="mt-0.5 size-3.5 shrink-0 text-emerald-700"
+                className="mt-0.5 size-3.5 shrink-0 text-primary"
                 aria-hidden="true"
               />
               Your session uses a signed, HTTP-only cookie. Your learning

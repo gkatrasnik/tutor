@@ -13,9 +13,12 @@ import {
 export default function AppNotFound() {
   return (
     <main className="mx-auto max-w-4xl p-5 sm:p-8 lg:p-10">
-      <Card className="mx-auto max-w-lg bg-white">
+      <Card className="mx-auto max-w-lg bg-card">
         <CardHeader>
-          <SearchX className="mb-2 size-8 text-stone-400" aria-hidden="true" />
+          <SearchX
+            className="mb-2 size-8 text-muted-foreground/70"
+            aria-hidden="true"
+          />
           <CardTitle>
             <h1 className="text-xl font-semibold">Resource not available</h1>
           </CardTitle>

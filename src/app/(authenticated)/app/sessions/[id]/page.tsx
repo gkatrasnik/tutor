@@ -37,17 +37,17 @@ export default async function SessionPage({
     <main className="mx-auto max-w-4xl p-5 sm:p-8 lg:p-10">
       <Link
         href={`/app/courses/${session.courseId}`}
-        className="text-sm text-emerald-700 hover:underline"
+        className="text-sm text-primary hover:underline"
       >
         ← {session.courseName}
       </Link>
-      <p className="mt-8 text-sm font-medium text-emerald-700">
-        Socratic tutor
-      </p>
+      <p className="mt-8 text-sm font-medium text-primary">Socratic tutor</p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight">
         {session.lessonTitle}
       </h1>
-      <p className="mt-3 leading-7 text-stone-600">{session.objective}</p>
+      <p className="mt-3 leading-7 text-muted-foreground">
+        {session.objective}
+      </p>
       <TutorChat
         key={session.id}
         sessionId={session.id}

@@ -52,11 +52,11 @@ export function AuthCallbackClient() {
 
   return (
     <div
-      className="flex items-center justify-center gap-3 text-sm text-stone-600"
+      className="flex items-center justify-center gap-3 text-sm text-muted-foreground"
       role="status"
     >
       <LoaderCircle
-        className="size-5 animate-spin text-emerald-700"
+        className="size-5 animate-spin text-primary"
         aria-hidden="true"
       />
       Completing your secure sign-in…

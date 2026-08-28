@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { signOutAction } from "@/lib/auth/actions";
 
 const menuItemClass =
-  "flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-sm text-stone-700 outline-none select-none data-highlighted:bg-stone-100 data-highlighted:text-stone-950";
+  "flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-sm text-foreground/80 outline-none select-none data-highlighted:bg-muted data-highlighted:text-foreground";
 
 export function AccountMenu({
   displayName,
@@ -24,19 +24,19 @@ export function AccountMenu({
   return (
     <Menu.Root>
       <Menu.Trigger
-        className="flex max-w-64 items-center gap-2 rounded-xl p-1 pl-2 text-left outline-none transition-colors hover:bg-stone-100 focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-stone-100"
+        className="flex max-w-64 items-center gap-2 rounded-xl p-1 pl-2 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted"
         aria-label="Open account menu"
       >
-        <span className="max-w-36 truncate text-sm font-medium text-stone-700 sm:max-w-52">
+        <span className="max-w-36 truncate text-sm font-medium text-foreground/80 sm:max-w-52">
           {displayName}
         </span>
         <Avatar className="size-9">
-          <AvatarFallback className="bg-emerald-100 text-emerald-800">
+          <AvatarFallback className="bg-primary/10 text-primary">
             {initials || "TU"}
           </AvatarFallback>
         </Avatar>
         <ChevronDown
-          className="mr-1 size-4 text-stone-400"
+          className="mr-1 size-4 text-muted-foreground/70"
           aria-hidden="true"
         />
       </Menu.Trigger>
@@ -47,14 +47,14 @@ export function AccountMenu({
           align="end"
           className="z-50 outline-none"
         >
-          <Menu.Popup className="w-64 origin-[var(--transform-origin)] rounded-xl border border-stone-200 bg-white p-1.5 shadow-lg outline-none transition-[transform,opacity] duration-100 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
+          <Menu.Popup className="w-64 origin-[var(--transform-origin)] rounded-xl border border-border bg-card p-1.5 shadow-lg outline-none transition-[transform,opacity] duration-100 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
             <div className="px-2.5 py-2">
-              <p className="truncate text-sm font-medium text-stone-950">
+              <p className="truncate text-sm font-medium text-foreground">
                 {displayName}
               </p>
-              <p className="truncate text-xs text-stone-500">{email}</p>
+              <p className="truncate text-xs text-muted-foreground">{email}</p>
             </div>
-            <Menu.Separator className="my-1 h-px bg-stone-200" />
+            <Menu.Separator className="my-1 h-px bg-border" />
             <Menu.LinkItem
               render={<Link href="/app/settings" />}
               closeOnClick
@@ -73,11 +73,12 @@ export function AccountMenu({
                 Admin
               </Menu.LinkItem>
             ) : null}
-            <Menu.Separator className="my-1 h-px bg-stone-200" />
+            <Menu.Separator className="my-1 h-px bg-border" />
             <form action={signOutAction}>
               <Menu.Item
+                nativeButton
                 render={<button type="submit" />}
-                className={`${menuItemClass} w-full text-red-700 data-highlighted:bg-red-50 data-highlighted:text-red-800`}
+                className={`${menuItemClass} w-full text-destructive data-highlighted:bg-destructive/10 data-highlighted:text-destructive`}
               >
                 <LogOut className="size-4" aria-hidden="true" />
                 Sign out

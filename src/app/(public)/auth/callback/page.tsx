@@ -13,10 +13,10 @@ export const dynamic = "force-dynamic";
 
 export default function AuthCallbackPage() {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#fbfcf9] px-5 py-12">
+    <main className="flex min-h-screen items-center justify-center bg-background px-5 py-12">
       <div className="w-full max-w-md">
         <Brand className="mx-auto mb-8 w-fit text-lg" />
-        <Card className="border-stone-200 bg-white">
+        <Card className="border-border bg-card">
           <CardHeader className="text-center">
             <CardTitle>Signing you in</CardTitle>
             <CardDescription>

@@ -70,7 +70,7 @@ export function SourceSheet({
         <div className="space-y-4 px-4 pb-6">
           {busy ? <p role="status">Loading sources…</p> : null}
           {error ? (
-            <p role="alert" className="text-red-700">
+            <p role="alert" className="text-destructive">
               {error}
             </p>
           ) : null}
@@ -81,7 +81,7 @@ export function SourceSheet({
               </h3>
               {source ? (
                 <>
-                  <p className="mt-1 text-xs text-stone-500">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     {source.pageNumber
                       ? `Page ${source.pageNumber}`
                       : "Pasted notes"}{" "}
@@ -92,7 +92,7 @@ export function SourceSheet({
                   </p>
                 </>
               ) : (
-                <p className="mt-2 text-sm text-stone-500">
+                <p className="mt-2 text-sm text-muted-foreground">
                   This material was removed or re-indexed after the answer was
                   saved.
                 </p>

@@ -129,18 +129,18 @@ export default async function CoursePage({
 
   return (
     <main className="mx-auto max-w-4xl p-5 sm:p-8 lg:p-10">
-      <Link href="/app" className="text-sm text-emerald-700 hover:underline">
+      <Link href="/app" className="text-sm text-primary hover:underline">
         ← All courses
       </Link>
-      <p className="mt-8 text-sm font-medium text-emerald-700">Your course</p>
+      <p className="mt-8 text-sm font-medium text-primary">Your course</p>
       <h1 className="mt-2 break-words text-3xl font-semibold tracking-tight">
         {course.name}
       </h1>
-      <p className="mt-3 text-sm text-stone-500">
+      <p className="mt-3 text-sm text-muted-foreground">
         Add your sources below, then generate an outline using all of them
         together.
       </p>
-      <Card className="mt-8 bg-white">
+      <Card className="mt-8 bg-card">
         <CardHeader>
           <CardTitle>Add course material</CardTitle>
           <CardDescription>
@@ -162,7 +162,7 @@ export default async function CoursePage({
           canInspectRetrieval={canInspectRetrieval}
         />
       </section>
-      <Card className="mt-8 bg-white">
+      <Card className="mt-8 bg-card">
         <CardHeader>
           <CardTitle>
             {outdated
@@ -183,18 +183,18 @@ export default async function CoursePage({
         </CardHeader>
         <CardContent className="space-y-3">
           {course.error ? (
-            <p role="alert" className="text-sm text-red-700">
+            <p role="alert" className="text-sm text-destructive">
               {course.error}
             </p>
           ) : null}
           {!canGenerate ? (
-            <p className="text-sm text-stone-500">
+            <p className="text-sm text-muted-foreground">
               Add and index at least one material. All attached materials must
               be indexed before generation.
             </p>
           ) : null}
           {course.status === "generating" ? (
-            <p className="text-sm text-stone-500">
+            <p className="text-sm text-muted-foreground">
               Check again shortly. Interrupted attempts can be retried after
               five minutes.
             </p>
@@ -213,8 +213,10 @@ export default async function CoursePage({
       </Card>
       {outline.length ? (
         <>
-          <p className="mt-5 leading-7 text-stone-600">{course.summary}</p>
-          <Card className="mt-8 bg-white">
+          <p className="mt-5 leading-7 text-muted-foreground">
+            {course.summary}
+          </p>
+          <Card className="mt-8 bg-card">
             <CardHeader>
               <CardTitle>{course.title ?? "Your learning path"}</CardTitle>
               <CardDescription>
@@ -223,7 +225,7 @@ export default async function CoursePage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="mb-2 text-xs text-stone-500">
+              <p className="mb-2 text-xs text-muted-foreground">
                 {progress.completed} of {progress.total} lessons completed ·{" "}
                 {progress.percent}%
               </p>
@@ -232,7 +234,7 @@ export default async function CoursePage({
                 aria-label={`${progress.completed} of ${progress.total} lessons completed`}
               />
               {outdated ? (
-                <p className="mt-2 text-xs text-stone-500">
+                <p className="mt-2 text-xs text-muted-foreground">
                   Progress applies to current sources only. Previous assessments
                   remain in conversation history.
                 </p>
@@ -244,7 +246,7 @@ export default async function CoursePage({
                 {outline.map((lesson) => (
                   <AccordionItem key={lesson.id} value={lesson.id}>
                     <AccordionTrigger className="gap-4 py-5">
-                      <span className="text-emerald-700">
+                      <span className="text-primary">
                         {String(lesson.ordinal + 1).padStart(2, "0")}
                       </span>
                       <span className="flex-1">{lesson.title}</span>
@@ -253,7 +255,7 @@ export default async function CoursePage({
                       ) : null}
                     </AccordionTrigger>
                     <AccordionContent className="pb-5 pl-8">
-                      <p className="leading-6 text-stone-600">
+                      <p className="leading-6 text-muted-foreground">
                         {lesson.objective}
                       </p>
                       <div
@@ -280,7 +282,7 @@ export default async function CoursePage({
               </Accordion>
             </CardContent>
           </Card>
-          <p className="mt-5 text-sm text-stone-500">
+          <p className="mt-5 text-sm text-muted-foreground">
             Use Finish lesson in the conversation to assess your understanding.
             A saved score of 70 or higher completes that lesson.
           </p>
@@ -295,7 +297,7 @@ export default async function CoursePage({
             {sessions.map((session) => (
               <li key={session.id}>
                 <Link
-                  className="text-sm text-emerald-700 hover:underline"
+                  className="text-sm text-primary hover:underline"
                   href={`/app/sessions/${session.id}`}
                 >
                   {session.title}

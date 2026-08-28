@@ -4,11 +4,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function AdminLoading() {
   return (
     <main
-      className="min-h-screen bg-stone-50"
+      className="min-h-screen bg-muted/50"
       aria-busy="true"
       aria-label="Loading administration analytics"
     >
-      <div className="border-b bg-white">
+      <div className="border-b bg-card">
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between px-5">
           <Skeleton className="h-7 w-28" />
           <Skeleton className="h-6 w-48" />
