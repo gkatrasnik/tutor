@@ -3,6 +3,7 @@ import { checkRateLimit } from "@vercel/firewall";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { aiRateLimits } from "@/db/schema";
+import { logServerError } from "@/lib/observability/logger";
 import { AI_REQUESTS_PER_MINUTE, AiLimitError } from "./contracts";
 
 function appHost(request?: Request) {
@@ -48,10 +49,9 @@ export async function enforceAiRateLimit(ownerId: string, request?: Request) {
         throw new Error(`Firewall rule unavailable (${result.error}).`);
     } catch (error) {
       if (error instanceof AiLimitError) throw error;
-      console.error("Vercel Firewall rate-limit request failed", {
-        rule,
+      logServerError("firewall.rate_limit.failed", error, {
+        ruleId: rule,
         host,
-        error: error instanceof Error ? error.message : "unknown",
       });
       throw new AiLimitError(
         "The AI rate-limit service is unavailable. Please retry shortly.",

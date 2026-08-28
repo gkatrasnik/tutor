@@ -2,15 +2,17 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/dal";
 import { assessmentInputSchema } from "@/lib/assessments/contracts";
 import { assessLesson, getAssessmentHistory } from "@/lib/assessments/service";
+import { logServerError } from "@/lib/observability/logger";
 import { TutorError } from "@/lib/tutor/service";
 import { enforceAiRateLimit } from "@/lib/usage/rate-limit";
 import { aiLimitResponse } from "@/lib/usage/contracts";
 
 export const maxDuration = 120;
 type Context = { params: Promise<{ id: string }> };
-function failure(error: unknown) {
+function failure(error: unknown, event: string) {
   const limited = aiLimitResponse(error);
   if (limited) return limited;
+  if (!(error instanceof TutorError)) logServerError(event, error);
   return Response.json(
     {
       error:
@@ -45,7 +47,7 @@ export async function GET(request: Request, context: Context) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    return failure(error);
+    return failure(error, "assessment.history.failed");
   }
 }
 
@@ -85,6 +87,6 @@ export async function POST(request: Request, context: Context) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    return failure(error);
+    return failure(error, "assessment.create.failed");
   }
 }

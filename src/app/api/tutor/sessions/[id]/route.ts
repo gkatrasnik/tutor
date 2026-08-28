@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth/dal";
+import { logServerError } from "@/lib/observability/logger";
 import {
   getTutorMessages,
   getTutorSession,
@@ -26,6 +27,10 @@ export async function GET(
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
+    if (!(error instanceof TutorError))
+      logServerError("tutor.conversation_load.failed", error, {
+        sessionId: id.data,
+      });
     return Response.json(
       {
         error:

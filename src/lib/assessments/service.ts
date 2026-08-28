@@ -10,6 +10,7 @@ import {
   messages,
   tutorSessions,
 } from "@/db/schema";
+import { logServerError } from "@/lib/observability/logger";
 import { retrieveCourseChunks } from "@/lib/rag/retrieval";
 import { TUTOR_LEASE_MS } from "@/lib/tutor/contracts";
 import { getTutorSession, TutorError } from "@/lib/tutor/service";
@@ -335,6 +336,11 @@ export async function assessLesson(
       );
     return { id: token };
   } catch (error) {
+    if (!(error instanceof TutorError))
+      logServerError("assessment.generation.failed", error, {
+        sessionId,
+        assessmentId: token,
+      });
     const message =
       error instanceof TutorError
         ? error.message

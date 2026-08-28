@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { courses, materials } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
 import { materialUploadPrefix } from "@/lib/materials/constants";
+import { logServerError } from "@/lib/observability/logger";
 import {
   createTextSchema,
   registerPdfSchema,
@@ -82,7 +83,10 @@ export async function POST(request: Request) {
         .returning({ id: materials.id });
 
       return Response.json(material, { status: 201 });
-    } catch {
+    } catch (error) {
+      logServerError("material.pdf_registration.failed", error, {
+        courseId: course.id,
+      });
       return Response.json(
         { error: "The uploaded PDF could not be verified." },
         { status: 400 },
@@ -120,7 +124,10 @@ export async function POST(request: Request) {
         })
         .returning({ id: materials.id });
       return Response.json(material, { status: 201 });
-    } catch {
+    } catch (error) {
+      logServerError("material.text_registration.failed", error, {
+        courseId: course.id,
+      });
       return Response.json(
         {
           error:

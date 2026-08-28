@@ -5,6 +5,7 @@ import {
   CourseGenerationError,
   ensureCourseOutline,
 } from "@/lib/courses/service";
+import { logServerError } from "@/lib/observability/logger";
 import { enforceAiRateLimit } from "@/lib/usage/rate-limit";
 import { aiLimitResponse } from "@/lib/usage/contracts";
 
@@ -27,6 +28,8 @@ export async function POST(
   } catch (error) {
     const limited = aiLimitResponse(error);
     if (limited) return limited;
+    if (!(error instanceof CourseGenerationError))
+      logServerError("course.outline.failed", error, { courseId: id.data });
     return Response.json(
       {
         error:

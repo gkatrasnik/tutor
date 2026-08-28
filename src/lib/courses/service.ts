@@ -4,6 +4,7 @@ import { and, asc, eq, exists, or, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { courses, lessons, materialChunks, materials } from "@/db/schema";
+import { logServerError } from "@/lib/observability/logger";
 
 import { generateCourseOutline } from "./generation";
 import {
@@ -244,6 +245,11 @@ export async function ensureCourseOutline(
     }
     return { id: claimed.id, status: "ready" };
   } catch (error) {
+    if (!(error instanceof CourseGenerationError))
+      logServerError("course.generation.failed", error, {
+        courseId,
+        generationToken: token,
+      });
     const message =
       error instanceof CourseGenerationError
         ? error.message

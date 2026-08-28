@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   process: vi.fn(),
   ensure: vi.fn(),
+  log: vi.fn(),
 }));
 vi.mock("@/lib/usage/rate-limit", () => ({ enforceAiRateLimit: vi.fn() }));
 vi.mock("@/lib/auth/dal", () => ({ requireUser: mocks.user }));
@@ -14,6 +15,9 @@ vi.mock("@/lib/materials/processing", () => ({
 vi.mock("@/lib/courses/service", () => ({
   ensureCourseOutline: mocks.ensure,
   CourseGenerationError: class extends Error {},
+}));
+vi.mock("@/lib/observability/logger", () => ({
+  logServerError: mocks.log,
 }));
 
 import { POST as processPost } from "@/app/api/materials/[id]/process/route";
@@ -46,9 +50,14 @@ describe("course generation routes", () => {
   it("does not generate if indexing fails", async () => {
     mocks.process.mockRejectedValue(new Error("private DB error"));
     const result = await processPost(request, context);
-    expect(result.status).toBe(422);
+    expect(result.status).toBe(500);
     expect(mocks.ensure).not.toHaveBeenCalled();
     expect(await result.text()).not.toContain("private DB error");
+    expect(mocks.log).toHaveBeenCalledWith(
+      "material.processing.failed",
+      expect.any(Error),
+      { materialId },
+    );
   });
 
   it("generates explicitly using the authenticated owner", async () => {

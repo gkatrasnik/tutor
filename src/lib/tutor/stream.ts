@@ -3,6 +3,7 @@ import "server-only";
 import { streamText, type LanguageModel } from "ai";
 
 import { env } from "@/lib/env";
+import { logServerError } from "@/lib/observability/logger";
 import { retrieveCourseChunks } from "@/lib/rag/retrieval";
 import { recordGateway } from "@/lib/usage/gateway";
 import { releaseUnusedQuota } from "@/lib/usage/quotas";
@@ -110,6 +111,11 @@ export function streamTutorTurn(
       );
       emit({ type: "done", messageId: turn.messageId });
     } catch (error) {
+      if (!(error instanceof TutorError))
+        logServerError("tutor.stream.failed", error, {
+          requestId: turn.requestId,
+          sessionId: turn.session.id,
+        });
       const message =
         error instanceof TutorError
           ? error.message
@@ -124,8 +130,8 @@ export function streamTutorTurn(
       if (turn.reservationId) {
         try {
           await releaseUnusedQuota(turn.reservationId, turn.ownerId);
-        } catch {
-          console.error("Tutor quota cleanup failed", {
+        } catch (error) {
+          logServerError("tutor.quota_cleanup.failed", error, {
             requestId: turn.requestId,
           });
         }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth/dal";
+import { logServerError } from "@/lib/observability/logger";
 import { startTutorSession, TutorError } from "@/lib/tutor/service";
 
 export async function POST(
@@ -14,6 +15,10 @@ export async function POST(
   try {
     return Response.json(await startTutorSession(id.data, user.id));
   } catch (error) {
+    if (!(error instanceof TutorError))
+      logServerError("tutor.session_start.failed", error, {
+        lessonId: id.data,
+      });
     return Response.json(
       {
         error:

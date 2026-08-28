@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { aiUsageEvents } from "@/db/schema";
+import { logServerError } from "@/lib/observability/logger";
 import { safeAiErrorCode, usageMetrics, type AiContext } from "./contracts";
 import { markQuotaStarted } from "./quotas";
 
@@ -85,10 +86,12 @@ export async function recordGateway<T>({
             eq(aiUsageEvents.status, "pending"),
           ),
         );
-    } catch {
+    } catch (error) {
       // Preserve the pending event for reconciliation. Never retry billable work
       // because accounting completion failed, or log prompts/provider responses.
-      console.error("AI usage finalization failed", { eventId: id });
+      logServerError("gateway.usage_finalization.failed", error, {
+        eventId: id,
+      });
     }
   }
   try {

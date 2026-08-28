@@ -8,6 +8,7 @@ import { extractText, getDocumentProxy } from "unpdf";
 import { db } from "@/db";
 import { materialChunks, materials } from "@/db/schema";
 import { env } from "@/lib/env";
+import { logServerError } from "@/lib/observability/logger";
 import { releaseUnusedQuota, reserveDailyQuota } from "@/lib/usage/quotas";
 import {
   chunkMaterialPages,
@@ -184,12 +185,21 @@ export async function processMaterial(materialId: string, ownerId: string) {
 
       await db.batch(writes);
     } catch (error) {
+      logServerError("material.index_persistence.failed", error, {
+        materialId,
+      });
       throw new MaterialProcessingError(
         "The material was read, but its search index could not be saved. Please retry.",
         { cause: error },
       );
     }
   } catch (error) {
+    if (
+      !(error instanceof MaterialProcessingError) &&
+      !(error instanceof MaterialChunkLimitError) &&
+      !(error instanceof EmbeddingError)
+    )
+      logServerError("material.processing.failed", error, { materialId });
     const message = safeProcessingMessage(error);
     await db
       .update(materials)
@@ -203,8 +213,10 @@ export async function processMaterial(materialId: string, ownerId: string) {
   } finally {
     try {
       await releaseUnusedQuota(reservationId, ownerId);
-    } catch {
-      console.error("Ingestion quota cleanup failed", { reservationId });
+    } catch (error) {
+      logServerError("material.quota_cleanup.failed", error, {
+        reservationId,
+      });
     }
   }
 }

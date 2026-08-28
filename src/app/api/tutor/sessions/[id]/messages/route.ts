@@ -2,6 +2,7 @@ import { after } from "next/server";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth/dal";
+import { logServerError } from "@/lib/observability/logger";
 import { tutorInputSchema } from "@/lib/tutor/contracts";
 import { prepareTutorTurn, TutorError } from "@/lib/tutor/service";
 import { streamTutorTurn } from "@/lib/tutor/stream";
@@ -59,8 +60,14 @@ export async function POST(
     after(() => stream.completion);
     return stream.response;
   } catch (error) {
+    const limited = aiLimitResponse(error);
+    if (!(error instanceof TutorError) && !limited)
+      logServerError("tutor.turn_start.failed", error, {
+        sessionId: id.data,
+        requestId: input.data.requestId,
+      });
     return (
-      aiLimitResponse(error) ??
+      limited ??
       Response.json(
         {
           error:

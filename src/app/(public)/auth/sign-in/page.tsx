@@ -41,7 +41,7 @@ export default async function SignInPage({
               <MailCheck className="size-5" aria-hidden="true" />
             </span>
             <CardTitle className="text-2xl tracking-tight">
-              Welcome to Tutor
+              <h1>Welcome to Tutor</h1>
             </CardTitle>
             <CardDescription className="text-sm leading-6">
               Sign in to continue learning from your private material.

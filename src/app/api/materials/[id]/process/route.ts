@@ -5,6 +5,7 @@ import {
   MaterialProcessingError,
   processMaterial,
 } from "@/lib/materials/processing";
+import { logServerError } from "@/lib/observability/logger";
 import { enforceAiRateLimit } from "@/lib/usage/rate-limit";
 import { aiLimitResponse } from "@/lib/usage/contracts";
 
@@ -27,11 +28,18 @@ export async function POST(
   } catch (error) {
     const limited = aiLimitResponse(error);
     if (limited) return limited;
+    if (!(error instanceof MaterialProcessingError))
+      logServerError("material.processing.failed", error, {
+        materialId: parsed.data,
+      });
     const message =
       error instanceof MaterialProcessingError
         ? error.message
         : "Material processing failed.";
-    return Response.json({ error: message }, { status: 422 });
+    return Response.json(
+      { error: message },
+      { status: error instanceof MaterialProcessingError ? 422 : 500 },
+    );
   }
 
   // Learners choose when all course sources are ready; indexing never generates.

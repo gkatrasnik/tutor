@@ -23,7 +23,7 @@ Tutor is deliberately source-bound: course generation, tutoring, and assessment 
 - Neon Auth for magic-link sign-in
 - Private Vercel Blob storage
 - Vercel AI SDK and AI Gateway
-- Vitest with isolated PGlite databases
+- Vitest with isolated PGlite databases and Playwright browser checks
 
 ## Local development
 
@@ -46,6 +46,8 @@ pnpm build                # Create a production build
 pnpm start                # Run the production build
 pnpm test                 # Run the test suite
 pnpm test:watch           # Run tests in watch mode
+pnpm test:e2e:install     # Install Playwright Chromium once
+pnpm test:e2e             # Run browser and security smoke tests
 pnpm lint                 # Run ESLint
 pnpm format:check         # Check formatting
 pnpm format               # Format supported files
@@ -65,20 +67,20 @@ The other profiles in `.vscode/launch.json` support server-only debugging, brows
 
 Copy `.env.example` to `.env.local` and provide the following values:
 
-| Variable | Purpose |
-| --- | --- |
-| `NEXT_PUBLIC_APP_URL` | Public application origin, such as `http://localhost:3000`. |
-| `DATABASE_URL` | Pooled Neon connection used by the application and maintenance scripts. |
-| `DATABASE_URL_UNPOOLED` | Direct Neon connection preferred by Drizzle migrations; falls back to `DATABASE_URL`. |
-| `BLOB_READ_WRITE_TOKEN` | Token for the connected private Vercel Blob store. |
-| `AI_GATEWAY_API_KEY` | Dedicated AI Gateway key used by all embedding and generation calls. |
-| `TUTOR_MODEL` | Generation model. Defaults to `alibaba/qwen3.7-flash`. |
-| `EMBEDDING_MODEL` | Embedding model. Defaults to `openai/text-embedding-3-small`. |
-| `EMBEDDING_DIMENSION` | Vector dimension. Must remain `1536` with the current schema. |
-| `ADMIN_EMAILS` | Comma-separated admin email allowlist; addresses are normalized to lowercase. |
-| `NEON_AUTH_BASE_URL` | Branch-specific Neon Auth endpoint. |
-| `NEON_AUTH_COOKIE_SECRET` | Stable cookie secret of at least 32 characters. |
-| `VERCEL_FIREWALL_RATE_LIMIT_ID` | Optional published Vercel Firewall rule ID. Leave empty locally. |
+| Variable                        | Purpose                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_APP_URL`           | Public application origin, such as `http://localhost:3000`.                           |
+| `DATABASE_URL`                  | Pooled Neon connection used by the application and maintenance scripts.               |
+| `DATABASE_URL_UNPOOLED`         | Direct Neon connection preferred by Drizzle migrations; falls back to `DATABASE_URL`. |
+| `BLOB_READ_WRITE_TOKEN`         | Token for the connected private Vercel Blob store.                                    |
+| `AI_GATEWAY_API_KEY`            | Dedicated AI Gateway key used by all embedding and generation calls.                  |
+| `TUTOR_MODEL`                   | Generation model. Defaults to `alibaba/qwen3.7-flash`.                                |
+| `EMBEDDING_MODEL`               | Embedding model. Defaults to `openai/text-embedding-3-small`.                         |
+| `EMBEDDING_DIMENSION`           | Vector dimension. Must remain `1536` with the current schema.                         |
+| `ADMIN_EMAILS`                  | Comma-separated admin email allowlist; addresses are normalized to lowercase.         |
+| `NEON_AUTH_BASE_URL`            | Branch-specific Neon Auth endpoint.                                                   |
+| `NEON_AUTH_COOKIE_SECRET`       | Stable cookie secret of at least 32 characters.                                       |
+| `VERCEL_FIREWALL_RATE_LIMIT_ID` | Optional published Vercel Firewall rule ID. Leave empty locally.                      |
 
 Use the dedicated Tutor AI Gateway key in every environment and configure its spend quota in the Gateway dashboard. The application does not modify Gateway billing settings or silently fall back to deployment OIDC.
 
@@ -209,18 +211,38 @@ Pages and layouts are Server Components unless a file begins with `"use client"`
 pnpm test
 pnpm lint
 pnpm build
+pnpm test:e2e:install # first run on a machine only
+pnpm test:e2e
 ```
 
-The automated suite uses fake AI and Blob providers and runs application SQL against isolated PGlite databases through the same database adapter used in production. Tests do not apply migrations to Neon, call live AI providers, validate live model quality, publish Firewall rules, or change external account settings.
+The unit/integration suite uses fake AI and Blob providers and runs application SQL against isolated PGlite databases through the same database adapter used in production. Playwright starts a plain local Next.js development server and checks the landing page, unauthenticated `/app` and `/admin` redirects, and browser security headers. Set `E2E_BASE_URL` to run it against a Preview deployment instead.
+
+Optional authenticated Playwright checks use saved browser state rather than an auth bypass. Save manually authenticated learner and admin states beneath the ignored `e2e/.auth/` directory, then set `PLAYWRIGHT_LEARNER_STATE` and `PLAYWRIGHT_ADMIN_STATE` to those file paths. Never commit storage-state files because they contain live session cookies. Magic-link delivery itself remains manual because it depends on an external mailbox and a single-use link.
+
+Tests do not apply migrations to Neon, call live AI providers, validate live model quality, publish Firewall rules, change external account settings, or control an email inbox.
 
 For an end-to-end smoke test, sign in, create a course, add at least two sources, generate an outline, complete a tutoring exchange, inspect its sources, finish an assessment, and verify progress. Repeat access checks with another account and confirm that direct course, session, and source URLs are denied.
+
+## Production hardening
+
+Every route receives a Content Security Policy plus `nosniff`, frame denial, strict referrer policy, restricted browser permissions, and cross-origin opener isolation. Production responses also receive two-year HSTS. Browser connections are limited to the app and Vercel Blob. Development alone permits `unsafe-eval` for Next.js debugging. The current non-nonce policy retains `unsafe-inline` for Next.js runtime scripts/styles; adopting per-request nonces would make every page dynamic and is a separate performance/security decision.
+
+Unexpected route and background failures use structured JSON logs containing an event, timestamp, safe identifiers, bounded error type/code/status metadata, and a stack trace capped at 10,000 characters. Because stack traces include exception messages, provider or database errors can expose values embedded by those libraries; restrict production-log access and retention accordingly. Context associated with authorization, cookies, passwords, secrets, tokens, prompts, content, text, Blob data, URLs, or email is redacted. Never add prompts, learner messages, extracted material, private Blob locations, session cookies, or credentials to log context.
+
+App, admin, and root error boundaries expose safe retry actions without rendering exception messages. Authenticated missing resources use the same response whether they were deleted or belong to another account. Courses, course details, sessions, and admin analytics have accessible loading states. Expected validation, quota, timeout, and provider failures remain explicit inline states.
+
+Known v1 limitations: no OCR, DOCX, audio/video, web search, collaboration, billing, background ingestion queue, course editor, custom email delivery, or automated mailbox control. Settings is linked but not implemented. Retrieval inspection is admin-only. Material ingestion and AI generation are bounded synchronous operations; an interruption can require the documented lease-based retry.
 
 ## Deployment
 
 1. Push the repository to a Git provider and import it as a Next.js project in Vercel.
-2. Connect Neon Auth/Postgres and a private Vercel Blob store.
-3. Configure all variables from `.env.example` for Development, Preview, and Production as appropriate.
-4. Apply migrations to the database branch used by the deployment.
-5. Deploy and verify authentication, uploads, AI Gateway usage, and quotas in Preview before promoting to Production.
+2. Connect Neon Auth/Postgres and a private Vercel Blob store. Confirm Preview uses the intended isolated Neon branch and integration variables.
+3. Configure all variables from `.env.example` for Development, Preview, and Production. Confirm the dedicated Gateway key still has the $5 monthly cap and auto-top-up disabled.
+4. Apply migrations to the Preview database branch, inspect the output, then deploy the exact commit under review.
+5. Run `pnpm test`, `pnpm lint`, `pnpm build`, and Playwright locally. Run Playwright again with `E2E_BASE_URL` targeting Preview and optional saved learner/admin states.
+6. In Preview, complete the manual learner journey described above. Exercise database and Firewall 429 responses and confirm retry/timeout/error states.
+7. Repeat ownership checks with a second account. Verify copied course, material, retrieval, session, source, and admin URLs reveal no cross-account data.
+8. Reconcile one embedding and one generation request ID, model, tokens, latency, and actual cost with AI Gateway. Review logs for structured events and the absence of private content.
+9. Promote the verified commit to Production, rerun public/header checks, and perform one minimal signed-in smoke test without reusing Preview data.
 
 Each branch or pull request can receive a Vercel Preview deployment. Ensure the connected Neon and Blob integrations expose the intended branch/environment-specific credentials before relying on deployment isolation.
