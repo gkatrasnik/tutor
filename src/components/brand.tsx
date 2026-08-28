@@ -3,10 +3,16 @@ import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 
-export function Brand({ className }: { className?: string }) {
+export function Brand({
+  className,
+  href = "/",
+}: {
+  className?: string;
+  href?: string;
+}) {
   return (
     <Link
-      href="/"
+      href={href}
       className={cn(
         "inline-flex items-center gap-2 font-semibold tracking-tight",
         className,

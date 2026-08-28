@@ -26,6 +26,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -39,7 +40,11 @@ import {
   analyticsRanges,
   parseAnalyticsRange,
   parsePage,
-  parseUserFilter,
+  parseRequestFilters,
+  requestFeatures,
+  requestStatuses,
+  requestSorts,
+  type RequestFilters,
 } from "@/lib/analytics/contracts";
 import { getAdminAnalytics } from "@/lib/analytics/service";
 
@@ -51,15 +56,41 @@ const rangeLabels = {
   "90d": "Last 90 days",
 } as const;
 
+const requestSortLabels = {
+  newest: "Newest first",
+  oldest: "Oldest first",
+  user_asc: "User A–Z",
+  user_desc: "User Z–A",
+  feature_asc: "Feature A–Z",
+  model_asc: "Model A–Z",
+  status_asc: "Status A–Z",
+  tokens_desc: "Most tokens",
+  latency_desc: "Highest latency",
+  cost_desc: "Highest cost",
+} as const;
+
+const selectClassName =
+  "h-9 w-full rounded-lg border border-input bg-white px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
 export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const query = await searchParams;
   const range = parseAnalyticsRange(query.range);
   const requestedPage = parsePage(query.page);
-  const userId = parseUserFilter(query.user);
-  const analytics = await getAdminAnalytics(range, requestedPage, userId);
+  const requestFilters = parseRequestFilters(query);
+  const activeTab =
+    query.tab === "requests"
+      ? "requests"
+      : query.tab === "users"
+        ? "users"
+        : "overview";
+  const analytics = await getAdminAnalytics(
+    range,
+    requestedPage,
+    requestFilters,
+  );
   const pageHref = (page: number) => {
-    const params = new URLSearchParams({ range, page: String(page) });
-    if (userId) params.set("user", userId);
+    const params = requestFilterParams(range, requestFilters);
+    params.set("page", String(page));
     return `/admin?${params}`;
   };
   if (requestedPage > analytics.pageCount)
@@ -128,6 +159,12 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
             </p>
           </div>
           <form className="flex flex-wrap items-end gap-2" action="/admin">
+            {activeTab !== "overview" ? (
+              <input type="hidden" name="tab" value={activeTab} />
+            ) : null}
+            {activeTab === "requests" ? (
+              <RequestFilterFields filters={requestFilters} />
+            ) : null}
             <label className="grid gap-1 text-xs font-medium text-stone-600">
               Date range
               <select
@@ -142,22 +179,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                 ))}
               </select>
             </label>
-            <label className="grid gap-1 text-xs font-medium text-stone-600">
-              User
-              <select
-                name="user"
-                defaultValue={userId ?? ""}
-                className="h-9 min-w-56 rounded-lg border border-input bg-white px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="">All users</option>
-                {analytics.users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.email}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className={buttonVariants({ size: "sm" })} type="submit">
+            <button className={buttonVariants({ size: "lg" })} type="submit">
               Apply
             </button>
           </form>
@@ -190,7 +212,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
           ))}
         </section>
 
-        <Tabs defaultValue="overview" className="mt-8">
+        <Tabs defaultValue={activeTab} className="mt-8">
           <TabsList aria-label="Analytics sections">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
@@ -348,8 +370,95 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
             ) : null}
             <BreakdownCard
               title="Request history"
-              description="Actual Gateway metadata stored by the application"
+              description={`${formatInteger(analytics.requestTotal)} matching Gateway ${analytics.requestTotal === 1 ? "operation" : "operations"}`}
             >
+              <form
+                action="/admin"
+                className="mb-5 grid gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4 md:grid-cols-2 xl:grid-cols-5"
+              >
+                <input type="hidden" name="range" value={range} />
+                <input type="hidden" name="tab" value="requests" />
+                <label className="grid gap-1 text-xs font-medium text-stone-600">
+                  User email
+                  <Input
+                    key={`user-${requestFilters.user}`}
+                    type="search"
+                    name="user"
+                    defaultValue={requestFilters.user}
+                    placeholder="name@example.com"
+                    maxLength={200}
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-stone-600">
+                  Model
+                  <Input
+                    key={`model-${requestFilters.model}`}
+                    type="search"
+                    name="model"
+                    defaultValue={requestFilters.model}
+                    placeholder="Model contains…"
+                    maxLength={200}
+                  />
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-stone-600">
+                  Feature
+                  <select
+                    name="feature"
+                    defaultValue={requestFilters.feature ?? ""}
+                    className={selectClassName}
+                  >
+                    <option value="">All features</option>
+                    {requestFeatures.map((feature) => (
+                      <option key={feature} value={feature}>
+                        {featureLabel(feature)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-stone-600">
+                  Status
+                  <select
+                    name="status"
+                    defaultValue={requestFilters.status ?? ""}
+                    className={selectClassName}
+                  >
+                    <option value="">All statuses</option>
+                    {requestStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1 text-xs font-medium text-stone-600">
+                  Sort by
+                  <select
+                    name="sort"
+                    defaultValue={requestFilters.sort}
+                    className={selectClassName}
+                  >
+                    {requestSorts.map((sort) => (
+                      <option key={sort} value={sort}>
+                        {requestSortLabels[sort]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-center gap-2 md:col-span-2 xl:col-span-5">
+                  <button
+                    type="submit"
+                    className={buttonVariants({ size: "lg" })}
+                  >
+                    Apply filters
+                  </button>
+                  <Link
+                    href={`/admin?range=${range}&tab=requests`}
+                    className={buttonVariants({ variant: "ghost", size: "lg" })}
+                  >
+                    Clear
+                  </Link>
+                </div>
+              </form>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -368,53 +477,66 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {analytics.requests.map((event) => (
-                    <TableRow key={event.id}>
-                      <TableCell>{formatTimestamp(event.createdAt)}</TableCell>
-                      <TableCell>{event.email ?? "Maintenance"}</TableCell>
-                      <TableCell>{featureLabel(event.feature)}</TableCell>
-                      <TableCell
-                        className="max-w-56 truncate font-mono text-xs"
-                        title={event.model}
-                      >
-                        {event.model}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            event.status === "failure"
-                              ? "destructive"
-                              : event.status === "pending"
-                                ? "outline"
-                                : "secondary"
-                          }
+                  {analytics.requests.length ? (
+                    analytics.requests.map((event) => (
+                      <TableRow key={event.id}>
+                        <TableCell>
+                          {formatTimestamp(event.createdAt)}
+                        </TableCell>
+                        <TableCell>{event.email ?? "Maintenance"}</TableCell>
+                        <TableCell>{featureLabel(event.feature)}</TableCell>
+                        <TableCell
+                          className="max-w-56 truncate font-mono text-xs"
+                          title={event.model}
                         >
-                          {event.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatInteger(event.inputTokens)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatInteger(event.outputTokens)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatInteger(event.reasoningTokens)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatInteger(event.totalTokens)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatLatency(event.latencyMs)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatLatency(event.timeToFirstTokenMs)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatUsd(event.costUsd)}
+                          {event.model}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              event.status === "failure"
+                                ? "destructive"
+                                : event.status === "pending"
+                                  ? "outline"
+                                  : "secondary"
+                            }
+                          >
+                            {event.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatInteger(event.inputTokens)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatInteger(event.outputTokens)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatInteger(event.reasoningTokens)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatInteger(event.totalTokens)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatLatency(event.latencyMs)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatLatency(event.timeToFirstTokenMs)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatUsd(event.costUsd)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={12}
+                        className="h-24 text-center text-stone-500"
+                      >
+                        No requests match these filters.
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
               <Pagination
@@ -476,4 +598,26 @@ function NumberCells({
       </TableCell>
     </>
   );
+}
+
+function RequestFilterFields({ filters }: { filters: RequestFilters }) {
+  return (
+    <>
+      <input type="hidden" name="user" value={filters.user} />
+      <input type="hidden" name="model" value={filters.model} />
+      <input type="hidden" name="feature" value={filters.feature ?? ""} />
+      <input type="hidden" name="status" value={filters.status ?? ""} />
+      <input type="hidden" name="sort" value={filters.sort} />
+    </>
+  );
+}
+
+function requestFilterParams(range: string, filters: RequestFilters) {
+  const params = new URLSearchParams({ range, tab: "requests" });
+  if (filters.user) params.set("user", filters.user);
+  if (filters.model) params.set("model", filters.model);
+  if (filters.feature) params.set("feature", filters.feature);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.sort !== "newest") params.set("sort", filters.sort);
+  return params;
 }

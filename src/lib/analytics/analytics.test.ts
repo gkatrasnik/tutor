@@ -122,27 +122,46 @@ describe("admin analytics", () => {
       errorCode: "provider_rate_limit",
     });
     expect(result.requests).toHaveLength(3);
-    expect(result.users).toEqual([
-      { id: "other", email: "other@example.test" },
-      { id: "owner", email: "owner@example.test" },
-    ]);
   });
 
-  it("filters every admin metric and request row by user", async () => {
-    const result = await getAdminAnalytics("30d", 1, "owner");
+  it("filters request rows by user email without changing dashboard aggregates", async () => {
+    const result = await getAdminAnalytics("30d", 1, {
+      user: "OWNER@example",
+      model: "",
+      feature: null,
+      status: null,
+      sort: "newest",
+    });
 
     expect(result.summary).toMatchObject({
-      requests: 2,
-      totalTokens: 120,
+      requests: 3,
+      totalTokens: 170,
       errors: 1,
     });
-    expect(result.byUser).toHaveLength(1);
-    expect(result.byUser[0]?.ownerId).toBe("owner");
+    expect(result.requestTotal).toBe(2);
     expect(result.requests).toHaveLength(2);
     expect(
-      result.requests.every((request) => request.ownerId === "owner"),
+      result.requests.every(
+        (request) => request.email === "owner@example.test",
+      ),
     ).toBe(true);
     expect(result.failures).toHaveLength(1);
+  });
+
+  it("combines request filters and sorts by user", async () => {
+    const result = await getAdminAnalytics("30d", 1, {
+      user: "",
+      model: "model-a",
+      feature: null,
+      status: "success",
+      sort: "user_asc",
+    });
+
+    expect(result.requestTotal).toBe(2);
+    expect(result.requests.map((request) => request.email)).toEqual([
+      "other@example.test",
+      "owner@example.test",
+    ]);
   });
 
   it("does not query analytics when the admin guard rejects access", async () => {

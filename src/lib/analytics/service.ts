@@ -1,6 +1,17 @@
 import "server-only";
 
-import { and, count, desc, eq, gte, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  ilike,
+  isNotNull,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 
 import { db } from "@/db";
 import { aiUsageEvents, profiles, tutorDailyUsage } from "@/db/schema";
@@ -12,6 +23,7 @@ import {
   ADMIN_USAGE_PAGE_SIZE,
   analyticsRangeStart,
   type AnalyticsRange,
+  type RequestFilters,
 } from "./contracts";
 
 const integerSum = (column: typeof aiUsageEvents.totalTokens) =>
@@ -57,15 +69,33 @@ export async function getLearnerQuotas(ownerId: string) {
 export async function getAdminAnalytics(
   range: AnalyticsRange,
   requestedPage: number,
-  userId: string | null = null,
+  requestFilters: RequestFilters = {
+    user: "",
+    model: "",
+    feature: null,
+    status: null,
+    sort: "newest",
+  },
 ) {
   const admin = await requireAdmin();
   const page = Math.max(1, requestedPage);
   const from = analyticsRangeStart(range);
   const dateScope = gte(aiUsageEvents.createdAt, from);
-  const scope = userId
-    ? and(dateScope, eq(aiUsageEvents.ownerId, userId))
-    : dateScope;
+  const requestConditions: SQL[] = [dateScope];
+  if (requestFilters.user)
+    requestConditions.push(
+      ilike(profiles.email, containsPattern(requestFilters.user)),
+    );
+  if (requestFilters.model)
+    requestConditions.push(
+      ilike(aiUsageEvents.model, containsPattern(requestFilters.model)),
+    );
+  if (requestFilters.feature)
+    requestConditions.push(eq(aiUsageEvents.feature, requestFilters.feature));
+  if (requestFilters.status)
+    requestConditions.push(eq(aiUsageEvents.status, requestFilters.status));
+  const requestScope = and(...requestConditions);
+  const requestOrder = requestOrderBy(requestFilters.sort);
   const offset = (page - 1) * ADMIN_USAGE_PAGE_SIZE;
   const averageLatency =
     sql<number>`coalesce(round(avg(${aiUsageEvents.latencyMs})), 0)::integer`.mapWith(
@@ -79,8 +109,8 @@ export async function getAdminAnalytics(
     byDay,
     byUser,
     requests,
+    requestTotalRows,
     failures,
-    users,
   ] = await Promise.all([
     db
       .select({
@@ -92,7 +122,7 @@ export async function getAdminAnalytics(
         unknownCosts: unknownCostCount,
       })
       .from(aiUsageEvents)
-      .where(scope),
+      .where(dateScope),
     db
       .select({
         feature: aiUsageEvents.feature,
@@ -102,7 +132,7 @@ export async function getAdminAnalytics(
         costUsd: knownCost,
       })
       .from(aiUsageEvents)
-      .where(scope)
+      .where(dateScope)
       .groupBy(aiUsageEvents.feature)
       .orderBy(desc(requestCount)),
     db
@@ -114,7 +144,7 @@ export async function getAdminAnalytics(
         costUsd: knownCost,
       })
       .from(aiUsageEvents)
-      .where(scope)
+      .where(dateScope)
       .groupBy(aiUsageEvents.model)
       .orderBy(desc(requestCount)),
     db
@@ -126,7 +156,7 @@ export async function getAdminAnalytics(
         costUsd: knownCost,
       })
       .from(aiUsageEvents)
-      .where(scope)
+      .where(dateScope)
       .groupBy(
         sql`to_char(${aiUsageEvents.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`,
       )
@@ -144,7 +174,7 @@ export async function getAdminAnalytics(
       })
       .from(aiUsageEvents)
       .leftJoin(profiles, eq(profiles.id, aiUsageEvents.ownerId))
-      .where(and(scope, isNotNull(aiUsageEvents.ownerId)))
+      .where(and(dateScope, isNotNull(aiUsageEvents.ownerId)))
       .groupBy(aiUsageEvents.ownerId, profiles.email)
       .orderBy(desc(integerSum(aiUsageEvents.totalTokens)))
       .limit(20),
@@ -168,10 +198,15 @@ export async function getAdminAnalytics(
       })
       .from(aiUsageEvents)
       .leftJoin(profiles, eq(profiles.id, aiUsageEvents.ownerId))
-      .where(scope)
-      .orderBy(desc(aiUsageEvents.createdAt), desc(aiUsageEvents.id))
+      .where(requestScope)
+      .orderBy(...requestOrder)
       .limit(ADMIN_USAGE_PAGE_SIZE)
       .offset(offset),
+    db
+      .select({ requests: count(aiUsageEvents.id) })
+      .from(aiUsageEvents)
+      .leftJoin(profiles, eq(profiles.id, aiUsageEvents.ownerId))
+      .where(requestScope),
     db
       .select({
         id: aiUsageEvents.id,
@@ -183,16 +218,9 @@ export async function getAdminAnalytics(
       })
       .from(aiUsageEvents)
       .leftJoin(profiles, eq(profiles.id, aiUsageEvents.ownerId))
-      .where(and(scope, eq(aiUsageEvents.status, "failure")))
+      .where(and(dateScope, eq(aiUsageEvents.status, "failure")))
       .orderBy(desc(aiUsageEvents.createdAt))
       .limit(10),
-    db
-      .select({
-        id: profiles.id,
-        email: profiles.email,
-      })
-      .from(profiles)
-      .orderBy(profiles.email),
   ]);
 
   const summary = summaryRows[0] ?? {
@@ -203,13 +231,15 @@ export async function getAdminAnalytics(
     costUsd: "0",
     unknownCosts: 0,
   };
+  const requestTotal = requestTotalRows[0]?.requests ?? 0;
   return {
     admin,
     range,
-    userId,
+    requestFilters,
     from,
     page,
-    pageCount: Math.max(1, Math.ceil(summary.requests / ADMIN_USAGE_PAGE_SIZE)),
+    pageCount: Math.max(1, Math.ceil(requestTotal / ADMIN_USAGE_PAGE_SIZE)),
+    requestTotal,
     summary,
     byFeature,
     byModel,
@@ -217,6 +247,49 @@ export async function getAdminAnalytics(
     byUser,
     requests,
     failures,
-    users,
   };
+}
+
+function containsPattern(value: string) {
+  return `%${value.replace(/[\\%_]/g, "\\$&")}%`;
+}
+
+function requestOrderBy(sort: RequestFilters["sort"]): SQL[] {
+  switch (sort) {
+    case "oldest":
+      return [asc(aiUsageEvents.createdAt), asc(aiUsageEvents.id)];
+    case "user_asc":
+      return [
+        sql`${profiles.email} asc nulls last`,
+        desc(aiUsageEvents.createdAt),
+      ];
+    case "user_desc":
+      return [
+        sql`${profiles.email} desc nulls last`,
+        desc(aiUsageEvents.createdAt),
+      ];
+    case "feature_asc":
+      return [asc(aiUsageEvents.feature), desc(aiUsageEvents.createdAt)];
+    case "model_asc":
+      return [asc(aiUsageEvents.model), desc(aiUsageEvents.createdAt)];
+    case "status_asc":
+      return [asc(aiUsageEvents.status), desc(aiUsageEvents.createdAt)];
+    case "tokens_desc":
+      return [
+        sql`${aiUsageEvents.totalTokens} desc nulls last`,
+        desc(aiUsageEvents.createdAt),
+      ];
+    case "latency_desc":
+      return [
+        sql`${aiUsageEvents.latencyMs} desc nulls last`,
+        desc(aiUsageEvents.createdAt),
+      ];
+    case "cost_desc":
+      return [
+        sql`${aiUsageEvents.costUsd} desc nulls last`,
+        desc(aiUsageEvents.createdAt),
+      ];
+    default:
+      return [desc(aiUsageEvents.createdAt), desc(aiUsageEvents.id)];
+  }
 }
