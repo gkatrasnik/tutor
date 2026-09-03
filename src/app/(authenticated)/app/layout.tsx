@@ -1,6 +1,5 @@
 import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { isAdminEmail } from "@/lib/auth/authorization";
 import { requireUser } from "@/lib/auth/dal";
 import { env } from "@/lib/env";
@@ -25,7 +24,6 @@ export default async function AppLayout({
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between px-4 sm:px-6">
           <Brand href="/app" />
           <div className="flex items-center gap-1">
-            <ThemeToggle />
             <AccountMenu
               displayName={displayName}
               email={user.email}

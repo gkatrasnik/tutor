@@ -75,9 +75,15 @@ export function SourceSheet({
             </p>
           ) : null}
           {sources?.map(({ label, source }) => (
-            <section key={label} className="rounded-lg border p-4">
-              <h3 className="break-words font-medium">
-                [{label}] {source?.filename ?? "Source no longer available"}
+            <section
+              key={label}
+              className="rounded-xl border border-border bg-card p-4"
+            >
+              <h3 className="flex items-start gap-2 break-words font-medium">
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-play-blue text-xs font-bold text-white">
+                  {label}
+                </span>
+                <span>{source?.filename ?? "Source no longer available"}</span>
               </h3>
               {source ? (
                 <>

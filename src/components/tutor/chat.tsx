@@ -1,5 +1,6 @@
 "use client";
 
+import { MessageCircleQuestion } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -134,22 +135,27 @@ export function TutorChat({
       </div>
       {!messages.length && !busy ? (
         <Card>
-          <CardContent className="space-y-3 p-5">
-            <p className="text-sm leading-6 text-muted-foreground">
-              Your tutor will introduce one idea at a time and help you reason
-              through it. You can ask a question or start with a short
-              introduction.
-            </p>
-            <Button
-              disabled={readOnly || active}
-              onClick={() => {
-                void send(
-                  "Please introduce this lesson and ask me an opening question.",
-                );
-              }}
-            >
-              Begin lesson
-            </Button>
+          <CardContent className="flex items-start gap-4 p-5">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-[0.65rem] bg-play-orange text-white shadow-sm">
+              <MessageCircleQuestion className="size-5" aria-hidden="true" />
+            </span>
+            <div className="space-y-3">
+              <p className="text-sm leading-6 text-muted-foreground">
+                Your tutor will introduce one idea at a time and help you reason
+                through it. You can ask a question or start with a short
+                introduction.
+              </p>
+              <Button
+                disabled={readOnly || active}
+                onClick={() => {
+                  void send(
+                    "Please introduce this lesson and ask me an opening question.",
+                  );
+                }}
+              >
+                Begin lesson
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : null}
@@ -158,11 +164,15 @@ export function TutorChat({
           <Card
             key={message.id}
             className={
-              message.role === "user" ? "ml-6 bg-primary/5" : "mr-6 bg-card"
+              message.role === "user" ? "ml-6" : "mr-6 bg-tutor-bubble"
             }
           >
             <CardContent className="p-5">
-              <p className="mb-2 text-xs font-semibold text-muted-foreground">
+              <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                <span
+                  className={`size-2 rounded-full ${message.role === "user" ? "bg-primary" : "bg-play-blue"}`}
+                  aria-hidden="true"
+                />
                 {message.role === "user" ? "You" : "Tutor"}
               </p>
               <p className="whitespace-pre-wrap break-words leading-7">
@@ -192,14 +202,28 @@ export function TutorChat({
         ))}
         {busy ? (
           <>
-            <Card className="ml-6 bg-primary/5">
-              <CardContent className="whitespace-pre-wrap break-words p-5">
-                {question}
+            <Card className="ml-6">
+              <CardContent className="p-5">
+                <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                  <span
+                    className="size-2 rounded-full bg-primary"
+                    aria-hidden="true"
+                  />
+                  You
+                </p>
+                <p className="whitespace-pre-wrap break-words">{question}</p>
               </CardContent>
             </Card>
-            <Card className="mr-6">
+            <Card className="mr-6 bg-tutor-bubble">
               <CardContent className="p-5">
-                <p className="mb-2 text-xs text-muted-foreground" role="status">
+                <p
+                  className="mb-2 flex items-center gap-2 text-xs text-muted-foreground"
+                  role="status"
+                >
+                  <span
+                    className="size-2 rounded-full bg-play-blue"
+                    aria-hidden="true"
+                  />
                   Tutor is responding… Not saved yet.
                 </p>
                 <p className="whitespace-pre-wrap break-words leading-7">

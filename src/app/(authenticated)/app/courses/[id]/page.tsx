@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, exists } from "drizzle-orm";
+import { BookOpenCheck, FilePlus2, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -140,9 +141,14 @@ export default async function CoursePage({
         Add your sources below, then generate an outline using all of them
         together.
       </p>
-      <Card className="mt-8 bg-card">
+      <Card className="mt-8">
         <CardHeader>
-          <CardTitle>Add course material</CardTitle>
+          <CardTitle className="flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-[0.65rem] bg-play-blue text-white shadow-sm">
+              <FilePlus2 className="size-5" aria-hidden="true" />
+            </span>
+            Add course material
+          </CardTitle>
           <CardDescription>
             Upload multiple PDFs one at a time or add several sets of notes.
             Uploading indexes the material; it does not generate an outline.
@@ -162,18 +168,23 @@ export default async function CoursePage({
           canInspectRetrieval={canInspectRetrieval}
         />
       </section>
-      <Card className="mt-8 bg-card">
+      <Card className="mt-8">
         <CardHeader>
-          <CardTitle>
-            {outdated
-              ? "Your outline is out of date"
-              : course.status === "generating"
-                ? "Generating your outline"
-                : course.status === "failed"
-                  ? "Outline generation needs attention"
-                  : course.outlineVersion >= 0
-                    ? "Your outline is up to date"
-                    : "Ready to build your learning path?"}
+          <CardTitle className="flex items-center gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-[0.65rem] bg-play-orange text-white shadow-sm">
+              <WandSparkles className="size-5" aria-hidden="true" />
+            </span>
+            <span>
+              {outdated
+                ? "Your outline is out of date"
+                : course.status === "generating"
+                  ? "Generating your outline"
+                  : course.status === "failed"
+                    ? "Outline generation needs attention"
+                    : course.outlineVersion >= 0
+                      ? "Your outline is up to date"
+                      : "Ready to build your learning path?"}
+            </span>
           </CardTitle>
           <CardDescription>
             {outdated
@@ -216,9 +227,14 @@ export default async function CoursePage({
           <p className="mt-5 leading-7 text-muted-foreground">
             {course.summary}
           </p>
-          <Card className="mt-8 bg-card">
+          <Card className="mt-8">
             <CardHeader>
-              <CardTitle>{course.title ?? "Your learning path"}</CardTitle>
+              <CardTitle className="flex items-center gap-3">
+                <span className="flex size-9 items-center justify-center rounded-[0.65rem] bg-primary text-primary-foreground shadow-sm">
+                  <BookOpenCheck className="size-5" aria-hidden="true" />
+                </span>
+                {course.title ?? "Your learning path"}
+              </CardTitle>
               <CardDescription>
                 {outline.length} ordered lessons · Open a lesson to see what you
                 will learn.
@@ -246,7 +262,7 @@ export default async function CoursePage({
                 {outline.map((lesson) => (
                   <AccordionItem key={lesson.id} value={lesson.id}>
                     <AccordionTrigger className="gap-4 py-5">
-                      <span className="text-primary">
+                      <span className="font-mono text-play-blue-foreground">
                         {String(lesson.ordinal + 1).padStart(2, "0")}
                       </span>
                       <span className="flex-1">{lesson.title}</span>

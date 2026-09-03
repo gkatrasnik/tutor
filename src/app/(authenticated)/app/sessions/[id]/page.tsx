@@ -41,7 +41,9 @@ export default async function SessionPage({
       >
         ← {session.courseName}
       </Link>
-      <p className="mt-8 text-sm font-medium text-primary">Socratic tutor</p>
+      <p className="mt-8 text-sm font-semibold text-play-blue-foreground">
+        Socratic tutor
+      </p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight">
         {session.lessonTitle}
       </h1>

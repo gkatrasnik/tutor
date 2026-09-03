@@ -1,14 +1,18 @@
 "use client";
 
 import { Menu } from "@base-ui/react/menu";
-import { ChevronDown, LogOut, Settings, ShieldCheck } from "lucide-react";
+import { ChevronDown, LogOut, Moon, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { useTheme } from "@/components/theme-provider";
 import { signOutAction } from "@/lib/auth/actions";
 
 const menuItemClass =
   "flex min-h-9 cursor-default items-center gap-2 rounded-lg px-2.5 text-sm text-foreground/80 outline-none select-none data-highlighted:bg-muted data-highlighted:text-foreground";
+
+const subscribeToHydration = () => () => undefined;
 
 export function AccountMenu({
   displayName,
@@ -21,6 +25,15 @@ export function AccountMenu({
   initials: string;
   showAdmin: boolean;
 }) {
+  const { resolvedTheme, setTheme } = useTheme();
+  const mounted = useSyncExternalStore(
+    subscribeToHydration,
+    () => true,
+    () => false,
+  );
+
+  const darkMode = mounted && resolvedTheme === "dark";
+
   return (
     <Menu.Root>
       <Menu.Trigger
@@ -55,14 +68,30 @@ export function AccountMenu({
               <p className="truncate text-xs text-muted-foreground">{email}</p>
             </div>
             <Menu.Separator className="my-1 h-px bg-border" />
-            <Menu.LinkItem
-              render={<Link href="/app/settings" />}
-              closeOnClick
-              className={menuItemClass}
+            <Menu.CheckboxItem
+              checked={darkMode}
+              disabled={!mounted}
+              onCheckedChange={(checked) =>
+                setTheme(checked ? "dark" : "light")
+              }
+              closeOnClick={false}
+              className={`${menuItemClass} justify-between`}
             >
-              <Settings className="size-4" aria-hidden="true" />
-              Settings
-            </Menu.LinkItem>
+              <span className="flex items-center gap-2">
+                <Moon className="size-4" aria-hidden="true" />
+                Dark mode
+              </span>
+              <span
+                className="flex h-5 w-9 items-center rounded-full bg-muted px-0.5 ring-1 ring-foreground/10 transition-colors data-[checked]:bg-primary"
+                data-checked={darkMode ? "" : undefined}
+                aria-hidden="true"
+              >
+                <span
+                  className="size-4 rounded-full bg-card shadow-sm transition-transform data-[checked]:translate-x-4"
+                  data-checked={darkMode ? "" : undefined}
+                />
+              </span>
+            </Menu.CheckboxItem>
             {showAdmin ? (
               <Menu.LinkItem
                 render={<Link href="/admin" />}

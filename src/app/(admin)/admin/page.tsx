@@ -16,8 +16,8 @@ import {
   formatUsd,
 } from "@/components/analytics/format";
 import { Pagination } from "@/components/analytics/pagination";
+import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -89,6 +89,12 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
     requestedPage,
     requestFilters,
   );
+  const adminName = analytics.admin.name?.trim() || analytics.admin.email;
+  const adminInitials = adminName
+    .split(/\s+|@/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
   const pageHref = (page: number) => {
     const params = requestFilterParams(range, requestFilters);
     params.set("page", String(page));
@@ -103,18 +109,21 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
       value: formatInteger(analytics.summary.requests),
       icon: Activity,
       detail: `${analytics.summary.errors} failed`,
+      iconTone: "bg-play-blue text-white",
     },
     {
       label: "Total tokens",
       value: formatInteger(analytics.summary.totalTokens),
       icon: ShieldCheck,
       detail: "Provider-reported totals",
+      iconTone: "bg-primary text-primary-foreground",
     },
     {
       label: "Average latency",
       value: formatLatency(analytics.summary.averageLatencyMs),
       icon: Clock3,
       detail: "Completed and failed operations",
+      iconTone: "bg-play-orange text-white",
     },
     {
       label: "Actual known cost",
@@ -123,6 +132,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
       detail: analytics.summary.unknownCosts
         ? `${analytics.summary.unknownCosts} operations have unknown cost`
         : "Every operation reported cost",
+      iconTone: "bg-play-yellow text-play-yellow-foreground",
     },
   ];
 
@@ -132,16 +142,18 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
         <div className="mx-auto flex h-16 max-w-[90rem] items-center justify-between px-5">
           <Brand />
           <div className="flex items-center gap-3">
-            <ThemeToggle />
             <Link
               href="/app"
               className={buttonVariants({ variant: "ghost", size: "sm" })}
             >
               Learner app
             </Link>
-            <Badge variant="outline">
-              <ShieldCheck aria-hidden="true" /> {analytics.admin.email}
-            </Badge>
+            <AccountMenu
+              displayName={adminName}
+              email={analytics.admin.email}
+              initials={adminInitials}
+              showAdmin
+            />
           </div>
         </div>
       </header>
@@ -198,10 +210,11 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                   <CardTitle className="text-sm text-muted-foreground">
                     {card.label}
                   </CardTitle>
-                  <card.icon
-                    className="size-4 text-primary"
-                    aria-hidden="true"
-                  />
+                  <span
+                    className={`flex size-8 items-center justify-center rounded-[0.6rem] ${card.iconTone}`}
+                  >
+                    <card.icon className="size-4" aria-hidden="true" />
+                  </span>
                 </div>
               </CardHeader>
               <CardContent>

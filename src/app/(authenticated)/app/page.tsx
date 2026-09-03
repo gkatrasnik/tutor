@@ -1,5 +1,5 @@
 import { and, count, desc, eq } from "drizzle-orm";
-import { BookOpenText, Database, MessageCircle } from "lucide-react";
+import { BookOpenText, Database, MessageCircle, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { CreateCourseForm } from "@/components/courses/create-course-form";
@@ -62,8 +62,22 @@ export default async function CoursesPage() {
     }),
   );
   const quotaCards = [
-    { label: "Tutor turns", icon: MessageCircle, ...quotas.tutor },
-    { label: "Material ingestion", icon: Database, ...quotas.ingestion },
+    {
+      label: "Tutor turns",
+      icon: MessageCircle,
+      iconTone: "bg-play-blue text-white",
+      progressTone:
+        "[&_[data-slot=progress-indicator]]:bg-play-blue [&_[data-slot=progress-track]]:bg-play-blue/10",
+      ...quotas.tutor,
+    },
+    {
+      label: "Material ingestion",
+      icon: Database,
+      iconTone: "bg-play-orange text-white",
+      progressTone:
+        "[&_[data-slot=progress-indicator]]:bg-play-orange [&_[data-slot=progress-track]]:bg-play-orange/10",
+      ...quotas.ingestion,
+    },
   ];
 
   return (
@@ -86,14 +100,15 @@ export default async function CoursesPage() {
         aria-label="Daily quota remaining"
       >
         {quotaCards.map((quota) => (
-          <Card key={quota.label} className="bg-card">
+          <Card key={quota.label}>
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
                 <CardTitle className="flex items-center gap-2">
-                  <quota.icon
-                    className="size-4 text-primary"
-                    aria-hidden="true"
-                  />
+                  <span
+                    className={`flex size-8 items-center justify-center rounded-[0.6rem] ${quota.iconTone}`}
+                  >
+                    <quota.icon className="size-4" aria-hidden="true" />
+                  </span>
                   {quota.label}
                 </CardTitle>
                 <Badge variant="outline">Resets 00:00 UTC</Badge>
@@ -105,6 +120,7 @@ export default async function CoursesPage() {
             </CardHeader>
             <CardContent>
               <Progress
+                className={quota.progressTone}
                 value={quota.limit ? (quota.used / quota.limit) * 100 : 0}
                 aria-label={`${quota.label}: ${quota.used} of ${quota.limit} used`}
               />
@@ -112,9 +128,14 @@ export default async function CoursesPage() {
           </Card>
         ))}
       </section>
-      <Card className="mt-8 bg-card">
+      <Card className="mt-8">
         <CardHeader>
-          <CardTitle>Create a course</CardTitle>
+          <CardTitle className="flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-[0.65rem] bg-play-yellow text-play-yellow-foreground shadow-sm">
+              <Plus className="size-5" aria-hidden="true" />
+            </span>
+            Create a course
+          </CardTitle>
           <CardDescription>
             Give it a name, add your materials, then generate one shared
             learning path.
@@ -142,7 +163,7 @@ export default async function CoursesPage() {
               <Card key={course.courseId} className="border-border bg-card">
                 <CardHeader>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                    <span className="flex size-11 items-center justify-center rounded-[0.7rem] bg-play-blue text-white shadow-sm">
                       <BookOpenText className="size-5" aria-hidden="true" />
                     </span>
                     <Badge
@@ -170,7 +191,7 @@ export default async function CoursesPage() {
                     {course.materialCount === 1 ? "material" : "materials"}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="flex flex-1 flex-col gap-4">
                   {course.summary ? (
                     <p className="text-sm leading-6 text-muted-foreground">
                       {course.summary}
@@ -199,9 +220,11 @@ export default async function CoursesPage() {
                   )}
                   <Link
                     href={`/app/courses/${course.courseId}`}
+                    data-testid="open-course"
                     className={buttonVariants({
                       variant: "outline",
                       size: "sm",
+                      className: "mt-auto self-start",
                     })}
                   >
                     Open course

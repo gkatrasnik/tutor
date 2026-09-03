@@ -16,34 +16,44 @@ export type CurrentUser = {
   name: string | null;
 };
 
-export const requireUser = cache(async (): Promise<CurrentUser> => {
+export const getOptionalUser = cache(async (): Promise<CurrentUser | null> => {
   const { data, error } = await getAuth().getSession();
 
   if (error || !data?.user?.id || !data.user.email) {
-    redirect("/auth/sign-in");
+    return null;
   }
 
   const email = normalizeEmail(data.user.email);
-
-  await db
-    .insert(profiles)
-    .values({
-      id: data.user.id,
-      email,
-    })
-    .onConflictDoUpdate({
-      target: profiles.id,
-      set: {
-        email,
-        updatedAt: new Date(),
-      },
-    });
 
   return {
     id: data.user.id,
     email,
     name: data.user.name ?? null,
   };
+});
+
+export const requireUser = cache(async (): Promise<CurrentUser> => {
+  const user = await getOptionalUser();
+
+  if (!user) {
+    redirect("/auth/sign-in");
+  }
+
+  await db
+    .insert(profiles)
+    .values({
+      id: user.id,
+      email: user.email,
+    })
+    .onConflictDoUpdate({
+      target: profiles.id,
+      set: {
+        email: user.email,
+        updatedAt: new Date(),
+      },
+    });
+
+  return user;
 });
 
 export const requireAdmin = cache(async () => {

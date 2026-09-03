@@ -23,7 +23,22 @@ export default async function SignInPage({
 
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-5 py-12">
-      <div className="pointer-events-none absolute -left-40 top-0 size-[30rem] rounded-full bg-primary/10 blur-3xl" />
+      <div
+        className="pointer-events-none absolute left-[8%] top-[12%] size-12 rounded-full bg-play-blue/70"
+        aria-hidden="true"
+      />
+      <div
+        className="pointer-events-none absolute right-[10%] top-[18%] hidden size-14 rotate-12 rounded-sm bg-play-orange/70 sm:block"
+        aria-hidden="true"
+      />
+      <div
+        className="dot-grid pointer-events-none absolute bottom-[12%] left-[12%] hidden size-20 text-play-yellow/55 sm:block"
+        aria-hidden="true"
+      />
+      <div
+        className="pointer-events-none absolute bottom-[15%] right-[8%] hidden h-3 w-24 -rotate-6 rounded-sm bg-primary/45 sm:block"
+        aria-hidden="true"
+      />
       <div className="relative z-10 w-full max-w-md">
         <div className="mb-8 flex items-center justify-between">
           <Brand className="text-lg" />
@@ -39,9 +54,9 @@ export default async function SignInPage({
           </div>
         </div>
 
-        <Card className="border-border bg-card shadow-2xl">
+        <Card className="border-border bg-card shadow-xl">
           <CardHeader className="text-center">
-            <span className="mx-auto mb-3 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <span className="mx-auto mb-3 flex size-12 items-center justify-center rounded-[0.75rem] bg-play-blue text-white shadow-sm">
               <MailCheck className="size-5" aria-hidden="true" />
             </span>
             <CardTitle className="text-2xl tracking-tight">

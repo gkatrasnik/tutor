@@ -1,4 +1,5 @@
 import { and, desc, eq, exists } from "drizzle-orm";
+import { FileText } from "lucide-react";
 import Link from "next/link";
 
 import { MaterialActions } from "@/app/(authenticated)/app/materials/material-actions";
@@ -61,8 +62,11 @@ export async function MaterialList({
   return (
     <div className="grid gap-3">
       {library.map((material) => (
-        <Card key={material.id} className="bg-card">
+        <Card key={material.id}>
           <CardContent className="flex flex-wrap items-start gap-3 p-5">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-[0.65rem] bg-play-blue text-white shadow-sm">
+              <FileText className="size-5" aria-hidden="true" />
+            </span>
             <div className="min-w-0 flex-1 basis-48">
               <h3 className="break-words font-medium">{material.filename}</h3>
               <div className="mt-2 flex flex-wrap items-center gap-2">

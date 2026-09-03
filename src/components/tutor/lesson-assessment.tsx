@@ -1,5 +1,6 @@
 "use client";
 
+import { GraduationCap } from "lucide-react";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -135,10 +136,15 @@ export function LessonAssessment({
   }
 
   return (
-    <Card className="mt-8 bg-card">
+    <Card className="mt-8">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle>Lesson assessment</CardTitle>
+          <CardTitle className="flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-[0.65rem] bg-play-yellow text-play-yellow-foreground shadow-sm">
+              <GraduationCap className="size-5" aria-hidden="true" />
+            </span>
+            Lesson assessment
+          </CardTitle>
           {!readOnly && (passed || initialCompleted) ? (
             <Badge variant="secondary">Lesson complete</Badge>
           ) : null}
