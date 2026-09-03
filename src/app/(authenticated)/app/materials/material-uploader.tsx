@@ -30,9 +30,11 @@ async function parseResponse(response: Response) {
 export function MaterialUploader({
   userId,
   courseId,
+  onBusyChange,
 }: {
   userId: string;
   courseId: string;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -64,6 +66,7 @@ export function MaterialUploader({
       return setError("PDF files must be no larger than 5 MB.");
 
     setBusy(true);
+    onBusyChange?.(true);
     setError(null);
     setProgress(5);
     try {
@@ -98,6 +101,7 @@ export function MaterialUploader({
       router.refresh();
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   }
 
@@ -108,6 +112,7 @@ export function MaterialUploader({
     const title = String(form.get("title") ?? "");
     const text = String(form.get("text") ?? "");
     setBusy(true);
+    onBusyChange?.(true);
     setError(null);
     setProgress(25);
     try {
@@ -132,6 +137,7 @@ export function MaterialUploader({
       router.refresh();
     } finally {
       setBusy(false);
+      onBusyChange?.(false);
     }
   }
 
@@ -145,10 +151,10 @@ export function MaterialUploader({
       ) : null}
       <Tabs defaultValue="pdf">
         <TabsList className="grid w-full grid-cols-2 sm:w-80">
-          <TabsTrigger value="pdf">
+          <TabsTrigger value="pdf" disabled={busy}>
             <FileUp aria-hidden="true" /> Upload PDF
           </TabsTrigger>
-          <TabsTrigger value="text">
+          <TabsTrigger value="text" disabled={busy}>
             <FileText aria-hidden="true" /> Paste text
           </TabsTrigger>
         </TabsList>

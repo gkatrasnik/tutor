@@ -1,28 +1,13 @@
 import { and, asc, desc, eq, exists } from "drizzle-orm";
-import { BookOpenCheck, FilePlus2, WandSparkles } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
 
-import { CourseAction } from "@/components/courses/course-action";
+import { CourseLearningPath } from "@/components/courses/course-learning-path";
+import { CourseMaterialsPanel } from "@/components/courses/course-materials-panel";
+import { CourseOutlineStatus } from "@/components/courses/course-outline-status";
 import { MaterialList } from "@/components/courses/material-list";
-import { MaterialUploader } from "@/app/(authenticated)/app/materials/material-uploader";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { StartLesson } from "@/components/tutor/start-lesson";
+import { getLearnerQuotas } from "@/lib/analytics/service";
 import { db } from "@/db";
 import {
   courses,
@@ -34,7 +19,6 @@ import {
 import { requireUser } from "@/lib/auth/dal";
 import { isAdminEmail } from "@/lib/auth/authorization";
 import { getLessonProgress } from "@/lib/assessments/service";
-import { courseProgress } from "@/lib/assessments/contracts";
 import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -126,184 +110,71 @@ export default async function CoursePage({
       .filter((lesson) => lesson.completed)
       .map((lesson) => lesson.lessonId),
   );
-  const progress = courseProgress(outline.length, completedIds.size);
+  const hasOutline = course.outlineVersion >= 0;
+  const issueCount = sourceStates.filter(
+    (source) => source.status !== "ready" || !source.indexed,
+  ).length;
+  const quotas = await getLearnerQuotas(user.id);
+  const outlineStatus = (
+    <CourseOutlineStatus
+      courseId={course.id}
+      status={course.status}
+      hasOutline={hasOutline}
+      outdated={outdated}
+      canGenerate={canGenerate}
+      error={course.error}
+    />
+  );
 
   return (
     <main className="mx-auto max-w-4xl p-5 sm:p-8 lg:p-10">
       <Link href="/app" className="text-sm text-primary hover:underline">
         ← All courses
       </Link>
-      <p className="mt-8 text-sm font-medium text-primary">Your course</p>
-      <h1 className="mt-2 break-words text-3xl font-semibold tracking-tight">
+      <h1 className="mt-6 break-words text-3xl font-semibold tracking-tight">
         {course.name}
       </h1>
-      <p className="mt-3 text-sm text-muted-foreground">
-        Add your sources below, then generate an outline using all of them
-        together.
-      </p>
-      <Card className="mt-8">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-3">
-            <span className="flex size-9 items-center justify-center rounded-[0.65rem] bg-play-blue text-white shadow-sm">
-              <FilePlus2 className="size-5" aria-hidden="true" />
-            </span>
-            Add course material
-          </CardTitle>
-          <CardDescription>
-            Upload multiple PDFs one at a time or add several sets of notes.
-            Uploading indexes the material; it does not generate an outline.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <MaterialUploader userId={user.id} courseId={course.id} />
-        </CardContent>
-      </Card>
-      <section className="mt-8" aria-labelledby="sources-heading">
-        <h2 id="sources-heading" className="mb-3 text-lg font-semibold">
-          Course materials · {sourceStates.length}
-        </h2>
+      {hasOutline ? (
+        course.summary ? (
+          <details open className="mt-3 text-sm text-muted-foreground">
+            <summary className="w-fit cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring">
+              About this course
+            </summary>
+            <p className="mt-2 leading-6">{course.summary}</p>
+          </details>
+        ) : null
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">
+          Add your material, then generate a course to start learning.
+        </p>
+      )}
+      {hasOutline ? outlineStatus : null}
+      {outline.length ? (
+        <CourseLearningPath
+          title={course.title ?? "Your learning path"}
+          lessons={outline}
+          completedIds={[...completedIds]}
+          disabled={outdated || course.status !== "ready"}
+          outdated={outdated}
+          tutorTurnsRemaining={quotas.tutor.remaining}
+        />
+      ) : null}
+      <CourseMaterialsPanel
+        key={course.id}
+        userId={user.id}
+        courseId={course.id}
+        hasOutline={hasOutline}
+        materialCount={sourceStates.length}
+        issueCount={issueCount}
+        importsRemaining={quotas.ingestion.remaining}
+      >
         <MaterialList
           ownerId={user.id}
           courseId={course.id}
           canInspectRetrieval={canInspectRetrieval}
         />
-      </section>
-      <Card className="mt-8">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-[0.65rem] bg-play-orange text-white shadow-sm">
-              <WandSparkles className="size-5" aria-hidden="true" />
-            </span>
-            <span>
-              {outdated
-                ? "Your outline is out of date"
-                : course.status === "generating"
-                  ? "Generating your outline"
-                  : course.status === "failed"
-                    ? "Outline generation needs attention"
-                    : course.outlineVersion >= 0
-                      ? "Your outline is up to date"
-                      : "Ready to build your learning path?"}
-            </span>
-          </CardTitle>
-          <CardDescription>
-            {outdated
-              ? "Your materials changed. Update the outline to include the current sources; the previous outline remains below until the update succeeds."
-              : "Generate one 4–8 lesson outline after adding all your sources. Limits: 300 chunks and 200,000 indexed characters across the course."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {course.error ? (
-            <p role="alert" className="text-sm text-destructive">
-              {course.error}
-            </p>
-          ) : null}
-          {!canGenerate ? (
-            <p className="text-sm text-muted-foreground">
-              Add and index at least one material. All attached materials must
-              be indexed before generation.
-            </p>
-          ) : null}
-          {course.status === "generating" ? (
-            <p className="text-sm text-muted-foreground">
-              Check again shortly. Interrupted attempts can be retried after
-              five minutes.
-            </p>
-          ) : null}
-          {course.status === "ready" && !outdated ? (
-            <Badge variant="secondary">Outline ready</Badge>
-          ) : (
-            <CourseAction
-              courseId={course.id}
-              status={course.status}
-              outdated={outdated}
-              disabled={!canGenerate}
-            />
-          )}
-        </CardContent>
-      </Card>
-      {outline.length ? (
-        <>
-          <p className="mt-5 leading-7 text-muted-foreground">
-            {course.summary}
-          </p>
-          <Card className="mt-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-3">
-                <span className="flex size-9 items-center justify-center rounded-[0.65rem] bg-primary text-primary-foreground shadow-sm">
-                  <BookOpenCheck className="size-5" aria-hidden="true" />
-                </span>
-                {course.title ?? "Your learning path"}
-              </CardTitle>
-              <CardDescription>
-                {outline.length} ordered lessons · Open a lesson to see what you
-                will learn.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="mb-2 text-xs text-muted-foreground">
-                {progress.completed} of {progress.total} lessons completed ·{" "}
-                {progress.percent}%
-              </p>
-              <Progress
-                value={progress.percent}
-                aria-label={`${progress.completed} of ${progress.total} lessons completed`}
-              />
-              {outdated ? (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Progress applies to current sources only. Previous assessments
-                  remain in conversation history.
-                </p>
-              ) : null}
-              <Accordion
-                className="mt-5"
-                defaultValue={outline.length ? [outline[0].id] : []}
-              >
-                {outline.map((lesson) => (
-                  <AccordionItem key={lesson.id} value={lesson.id}>
-                    <AccordionTrigger className="gap-4 py-5">
-                      <span className="font-mono text-play-blue-foreground">
-                        {String(lesson.ordinal + 1).padStart(2, "0")}
-                      </span>
-                      <span className="flex-1">{lesson.title}</span>
-                      {completedIds.has(lesson.id) ? (
-                        <Badge variant="secondary">Complete</Badge>
-                      ) : null}
-                    </AccordionTrigger>
-                    <AccordionContent className="pb-5 pl-8">
-                      <p className="leading-6 text-muted-foreground">
-                        {lesson.objective}
-                      </p>
-                      <div
-                        className="mt-3 flex flex-wrap gap-2"
-                        aria-label="Key concepts"
-                      >
-                        {lesson.concepts.map((concept, index) => (
-                          <Badge
-                            key={`${index}-${concept}`}
-                            variant="secondary"
-                            className="h-auto whitespace-normal text-left"
-                          >
-                            {concept}
-                          </Badge>
-                        ))}
-                      </div>
-                      <StartLesson
-                        lessonId={lesson.id}
-                        disabled={outdated || course.status !== "ready"}
-                      />
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </CardContent>
-          </Card>
-          <p className="mt-5 text-sm text-muted-foreground">
-            Use Finish lesson in the conversation to assess your understanding.
-            A saved score of 70 or higher completes that lesson.
-          </p>
-        </>
-      ) : null}
+      </CourseMaterialsPanel>
+      {!hasOutline ? outlineStatus : null}
       {sessions.length ? (
         <section className="mt-8" aria-labelledby="history-heading">
           <h2 id="history-heading" className="mb-3 text-lg font-semibold">

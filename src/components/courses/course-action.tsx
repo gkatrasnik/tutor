@@ -70,7 +70,7 @@ export function CourseAction({
   return (
     <div className="space-y-2">
       <Button
-        variant="outline"
+        variant="default"
         size="sm"
         onClick={generate}
         disabled={busy || disabled}
