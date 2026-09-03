@@ -102,11 +102,15 @@ For Vercel Preview deployments, enable Preview on the Neon Marketplace integrati
 
 1. Enable Auth for the production branch in the Neon/Vercel integration.
 2. Enable Magic Link sign-in and built-in email delivery in Neon Auth.
-3. Add the local application origin as a trusted development origin. Vercel manages connected Preview and Production origins.
+3. Add the local application origin as a trusted development origin. Verify that the production application origin (including any custom domain) is trusted on the Neon Auth branch used by production. The Vercel integration manages connected deployment origins automatically.
 4. Set the same stable `NEON_AUTH_COOKIE_SECRET` in Local, Preview, and Production.
 5. Configure `ADMIN_EMAILS`, pull the environment variables into `.env.local`, and redeploy.
 
 The auth proxy performs an optimistic session check for `/app/**` and `/admin/**`. Server-only data access functions repeat authorization before reading private data, creating profiles, or granting admin access.
+
+Magic-link requests send an absolute callback URL based on the browser's current origin, such as `https://your-domain.com/auth/callback`. This keeps production and preview sign-ins on the domain where they started instead of leaving Neon to resolve a relative callback against a default origin.
+
+If an email login link redirects to localhost, deploy the current sign-in form and request a fresh link from the production site; existing emails retain their original destination. Confirm that production uses the correct branch-specific `NEON_AUTH_BASE_URL` and that the application's domain is trusted there. Set `NEXT_PUBLIC_APP_URL` to the production origin as well; this variable is used for application configuration, but does not determine the magic-link callback.
 
 ### Private Blob storage
 

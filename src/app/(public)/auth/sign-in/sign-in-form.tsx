@@ -30,7 +30,7 @@ export function SignInForm() {
     try {
       const result = await authClient.signIn.magicLink({
         email: email.trim().toLowerCase(),
-        callbackURL: "/auth/callback",
+        callbackURL: new URL("/auth/callback", window.location.origin).href,
       });
 
       if (result.error) {
