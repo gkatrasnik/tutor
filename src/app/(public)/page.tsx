@@ -154,7 +154,7 @@ export default async function LandingPage() {
             <Sparkles className="size-3.5" aria-hidden="true" />
             Your material. Your pace.
           </Badge>
-          <h1 className="text-balance max-w-3xl text-5xl font-bold leading-[1.02] tracking-[-0.045em] text-foreground sm:text-6xl lg:text-7xl">
+          <h1 className="text-balance max-w-3xl text-5xl font-bold leading-[1.02] tracking-[-0.045em] text-foreground sm:text-6xl lg:text-6xl">
             Stop rereading.{" "}
             <span className="text-primary">Start understanding.</span>
           </h1>
