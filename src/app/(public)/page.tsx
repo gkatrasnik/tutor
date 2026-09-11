@@ -11,6 +11,7 @@ import Link from "next/link";
 
 import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
+import { PublicHeader } from "@/components/public-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -84,45 +85,37 @@ export default async function LandingPage() {
 
   return (
     <main className="min-h-screen overflow-hidden bg-background">
-      <header className="relative z-30 border-b border-border/70 bg-background/90 backdrop-blur">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
-          <Brand className="text-lg" />
-          <nav
-            className="flex items-center gap-1.5 sm:gap-2"
-            aria-label="Primary navigation"
-          >
-            {user ? (
-              <>
-                <Link
-                  href="/app"
-                  className={cn(
-                    buttonVariants({ variant: "outline" }),
-                    "hidden sm:inline-flex",
-                  )}
-                >
-                  My courses
-                </Link>
-                <AccountMenu
-                  displayName={displayName}
-                  email={user.email}
-                  initials={initials}
-                  showAdmin={isAdminEmail(user.email, env.ADMIN_EMAILS)}
-                />
-              </>
-            ) : (
-              <>
-                <ThemeToggle />
-                <Link
-                  href="/auth/sign-in"
-                  className={buttonVariants({ variant: "outline" })}
-                >
-                  Sign in
-                </Link>
-              </>
-            )}
-          </nav>
-        </div>
-      </header>
+      <PublicHeader>
+        {user ? (
+          <>
+            <Link
+              href="/app"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "hidden sm:inline-flex",
+              )}
+            >
+              My courses
+            </Link>
+            <AccountMenu
+              displayName={displayName}
+              email={user.email}
+              initials={initials}
+              showAdmin={isAdminEmail(user.email, env.ADMIN_EMAILS)}
+            />
+          </>
+        ) : (
+          <>
+            <ThemeToggle />
+            <Link
+              href="/auth/sign-in"
+              className={buttonVariants({ variant: "outline" })}
+            >
+              Sign in
+            </Link>
+          </>
+        )}
+      </PublicHeader>
 
       <section className="relative mx-auto grid max-w-7xl items-center gap-14 px-5 pb-24 pt-16 sm:px-8 lg:grid-cols-[1.08fr_0.92fr] lg:pb-32 lg:pt-24">
         <div
