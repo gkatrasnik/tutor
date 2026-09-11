@@ -11,6 +11,7 @@ import Link from "next/link";
 
 import { AccountMenu } from "@/components/account-menu";
 import { Brand } from "@/components/brand";
+import { FreeUsageNotice } from "@/components/free-usage-notice";
 import { PublicHeader } from "@/components/public-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
@@ -164,7 +165,7 @@ export default async function LandingPage() {
                 "h-12 px-5 text-base",
               )}
             >
-              {user ? "Go to my courses" : "Create your first course"}
+              {user ? "Go to my courses" : "Try for free"}
               <ArrowRight aria-hidden="true" />
             </Link>
             <Link
@@ -177,6 +178,7 @@ export default async function LandingPage() {
               See how it works
             </Link>
           </div>
+          {!user && <FreeUsageNotice className="mt-5 max-w-lg" />}
           <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
             <LockKeyhole className="size-4 text-primary" aria-hidden="true" />
             Private by design

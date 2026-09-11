@@ -10,7 +10,7 @@ test("landing page exposes the primary learning action", async ({ page }) => {
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Create your first course" }),
+    page.getByRole("link", { name: "Try for free" }),
   ).toHaveAttribute("href", "/auth/sign-in");
   await expect(page.getByRole("link", { name: "Sign in" })).toHaveAttribute(
     "href",

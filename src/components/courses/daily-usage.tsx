@@ -17,7 +17,7 @@ export function DailyUsage({
       <AccordionItem value="usage">
         <AccordionTrigger className="items-center gap-3 text-muted-foreground">
           <span className="flex flex-1 flex-wrap items-center gap-x-4 gap-y-1">
-            <span className="font-medium">Daily usage</span>
+            <span className="font-medium">Daily free usage</span>
             <span className="font-normal">
               {quotas.tutor.remaining} tutor turns left ·{" "}
               {quotas.ingestion.remaining} material imports left

@@ -1,6 +1,7 @@
 import { LockKeyhole, MailCheck } from "lucide-react";
 import Link from "next/link";
 
+import { FreeUsageNotice } from "@/components/free-usage-notice";
 import { PublicHeader } from "@/components/public-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -52,10 +53,11 @@ export default async function SignInPage({
                 <h1>Welcome to Tutor</h1>
               </CardTitle>
               <CardDescription className="text-sm leading-6">
-                Sign in to continue learning from your private material.
+                Try Tutor for free, or sign in to continue learning.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
+              <FreeUsageNotice />
               {error && (
                 <Alert variant="destructive">
                   <AlertTitle>This sign-in link is no longer valid</AlertTitle>
