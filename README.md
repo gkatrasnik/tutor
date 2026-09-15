@@ -1,15 +1,15 @@
 # Tutor
 
-Tutor turns a learner's private PDFs and pasted notes into a structured course with grounded, Socratic tutoring, lesson assessments, and progress tracking.
+Tutor turns a learner's private PDFs and pasted notes into a structured course with guided lessons, multiple-choice tests, and progress tracking.
 
 ## Features
 
 - Passwordless magic-link authentication with account-scoped courses and materials.
 - Private PDF uploads and pasted text, with server-side extraction, validation, chunking, and vector indexing.
 - AI-generated course outlines containing 4–8 ordered lessons, objectives, key concepts, and retrieval queries.
-- Persistent Socratic tutoring grounded in passages retrieved from every indexed source in the course.
+- Persistent, bite-sized lessons grounded in the indexed course sources.
 - Source citations with filenames, PDF page numbers, and excerpts.
-- Formative lesson assessments with strengths, knowledge gaps, next steps, and deterministic progress tracking.
+- End-of-lesson quiz wizards with server-side grading and deterministic progress tracking.
 - Daily learner quotas, rolling request limits, AI token/cost accounting, and read-only admin analytics.
 - Admin-only retrieval inspection and an email allowlist for administrative access.
 
@@ -137,17 +137,19 @@ Learners create a named course, add one or more sources, and explicitly generate
 
 Adding, removing, or re-indexing a source increments the course source version. The existing outline remains visible but is marked out of date until the learner generates an updated outline. Concurrent generation is guarded by an atomic database claim, and publication replaces lessons transactionally only when the owner and source version still match.
 
-### Socratic tutoring
+### Guided lessons
 
-Starting a lesson creates or resumes a persistent session. For each learner message, Tutor retrieves relevant course passages, streams a short grounded explanation, and asks a focused question or offers a hint. The model receives trusted server-loaded conversation state, the latest 20 saved messages, and passages from all indexed materials in the course.
+Starting a lesson creates or resumes a persistent session. The tutor prepares 3–6 small explanation-and-question chunks from retrieved course passages. Each submitted short answer receives brief feedback before the next chunk is shown. These practice answers are not scored. **Ask for help** sends a clarification request without advancing the lesson; **Answer** resumes the normal answer-and-continue flow. The saved plan, passage order, and answered-chunk count persist across navigation and reloads; a failed tutor response does not advance progress.
 
-Completed conversations persist across navigation and reloads. Duplicate completed request IDs replay the saved result without another model call. If course sources change, existing sessions become read-only but remain available under **Recent conversations**.
+Duplicate completed request IDs replay the saved result without another model call. After a connection problem, the client checks the saved request before enabling another answer; retries keep their request ID until the outcome is known. The server also verifies the displayed lesson step and sequence to prevent a stale answer advancing a later part. If course sources change, existing sessions become read-only but remain available under **Recent conversations**. Existing conversations without a saved plan begin the guided workflow when resumed.
 
-### Assessments and progress
+### Tests and progress
 
-After at least two completed tutoring exchanges, **Finish lesson** evaluates the learner's saved answers. It returns a 0–100 mastery estimate, strengths, knowledge gaps, and a recommended next step. A saved score of 70 or higher completes the lesson.
+After the learner answers the short question for every chunk, **Test** becomes available. The model generates 3–6 questions about the taught lesson, each with A–D choices, reusing the saved lesson passages (older plans without passages fall back to retrieval). A wizard shows one question per step, preserves choices when moving Back and Next, and submits all answers together on **Complete test**. Correct answers remain on the server until submission. After deterministic grading, **Review answers** shows each selected answer, the correct answer, and its explanation. The review remains available in test history. A pass exposes **Next lesson**, or **Back to course** at the end, with **Test again** as the secondary action.
 
-Assessment history is retained, and unchanged successful assessments are reused. A later lower score does not revoke completion. Course progress is calculated from passing assessments for lessons in the current outline; replacing an outline creates new lesson IDs and fresh progress while preserving old conversations and assessments.
+At least 50% correct passes the test. Failed tests can be retaken immediately without more chat; an unfinished generated test is reused when **Test** is pressed again. Duplicate submissions return the original grade. A later lower score does not revoke completion. Legacy chat assessments retain their original 70-point passing threshold. Replacing an outline creates fresh lesson progress while preserving old conversations and results.
+
+Apply migration `0009_lesson_quizzes.sql` with `pnpm db:migrate` before running this workflow against an existing database.
 
 ## Limits and usage accounting
 
@@ -225,7 +227,7 @@ Optional authenticated Playwright checks use saved browser state rather than an 
 
 Tests do not apply migrations to Neon, call live AI providers, validate live model quality, publish Firewall rules, change external account settings, or control an email inbox.
 
-For an end-to-end smoke test, sign in, create a course, add at least two sources, generate an outline, complete a tutoring exchange, inspect its sources, finish an assessment, and verify progress. Repeat access checks with another account and confirm that direct course, session, and source URLs are denied.
+For an end-to-end smoke test, sign in, create a course, add at least two sources, generate an outline, answer every lesson question, inspect its sources, complete a quiz, and verify progress. Check that a failed quiz can be retaken and that no grade appears before submission. Repeat access checks with another account and confirm that direct course, session, and source URLs are denied.
 
 ## Production hardening
 

@@ -64,6 +64,13 @@
       "when": 1787748598770,
       "tag": "0008_usage_accounting",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789132254995,
+      "tag": "0009_lesson_quizzes",
+      "breakpoints": true
     }
   ]
 }

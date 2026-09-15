@@ -199,6 +199,9 @@ export const tutorSessions = pgTable(
     retrievalQuery: text("retrieval_query").notNull(),
     sourceVersion: integer("source_version").notNull(),
     nextSequence: integer("next_sequence").default(0).notNull(),
+    lessonPlan:
+      jsonb("lesson_plan").$type<import("@/lib/tutor/lesson").LessonPlan>(),
+    completedChunks: integer("completed_chunks").default(0).notNull(),
     activeToken: uuid("active_token"),
     activeStartedAt: timestamp("active_started_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -370,6 +373,8 @@ export const lessonAssessments = pgTable(
       .notNull(),
     status: assessmentStatus("status").default("pending").notNull(),
     score: integer("score"),
+    quiz: jsonb("quiz").$type<import("@/lib/assessments/contracts").Quiz>(),
+    answers: jsonb("answers").$type<number[]>(),
     strengths: jsonb("strengths").$type<string[]>().default([]).notNull(),
     gaps: jsonb("gaps").$type<string[]>().default([]).notNull(),
     nextStep: text("next_step"),
@@ -385,7 +390,7 @@ export const lessonAssessments = pgTable(
     ),
     uniqueIndex("lesson_assessments_snapshot_unique")
       .on(table.sessionId, table.throughOrdinal)
-      .where(sql`${table.status} = 'complete'`),
+      .where(sql`${table.status} = 'complete' and ${table.quiz} is null`),
     index("lesson_assessments_owner_session_idx").on(
       table.ownerId,
       table.sessionId,

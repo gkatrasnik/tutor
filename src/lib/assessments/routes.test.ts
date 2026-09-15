@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   assess: vi.fn(),
+  submit: vi.fn(),
   history: vi.fn(),
 }));
 vi.mock("@/lib/usage/rate-limit", () => ({ enforceAiRateLimit: vi.fn() }));
 vi.mock("@/lib/auth/dal", () => ({ requireUser: mocks.user }));
 vi.mock("@/lib/assessments/service", () => ({
   assessLesson: mocks.assess,
+  submitQuiz: mocks.submit,
   getAssessmentHistory: mocks.history,
 }));
 vi.mock("@/lib/tutor/service", () => ({
@@ -22,7 +24,11 @@ vi.mock("@/lib/tutor/service", () => ({
   },
 }));
 
-import { GET, POST } from "@/app/api/tutor/sessions/[id]/assessments/route";
+import {
+  GET,
+  POST,
+  PUT,
+} from "@/app/api/tutor/sessions/[id]/assessments/route";
 import { TutorError } from "@/lib/tutor/service";
 const sessionId = "02564de2-4a8b-4426-8fe2-4e92cc1265ea";
 const context = { params: Promise.resolve({ id: sessionId }) };
@@ -135,4 +141,26 @@ describe("assessment route boundaries", () => {
     expect(mocks.assess).not.toHaveBeenCalled();
     expect(mocks.history).not.toHaveBeenCalled();
   });
+});
+
+it("accepts only quiz ID and option indices for server-side final grading", async () => {
+  const assessmentId = crypto.randomUUID();
+  mocks.submit.mockResolvedValue({ score: 50, passed: true });
+  expect(
+    (await PUT(request({ assessmentId, answers: [0, 1, 2, 3] }), context))
+      .status,
+  ).toBe(200);
+  expect(mocks.submit).toHaveBeenCalledExactlyOnceWith(
+    sessionId,
+    "owner",
+    assessmentId,
+    [0, 1, 2, 3],
+  );
+  for (const body of [
+    { assessmentId, answers: [0, 1] },
+    { assessmentId, answers: [0, 1, 4] },
+    { assessmentId, answers: [0, 1, 2], score: 100 },
+    { assessmentId, answers: [0, 1, null] },
+  ])
+    expect((await PUT(request(body), context)).status).toBe(400);
 });

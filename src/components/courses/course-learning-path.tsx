@@ -126,8 +126,8 @@ export function CourseLearningPath({
         </CardContent>
       </Card>
       <p className="mt-4 text-sm text-muted-foreground">
-        Use Finish lesson in the conversation to assess your understanding. A
-        saved score of 70 or higher completes that lesson.
+        Work through each lesson part, then press Test. Answer at least half of
+        the quiz questions correctly to complete the lesson.
       </p>
     </section>
   );

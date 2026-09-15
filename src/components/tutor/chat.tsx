@@ -11,9 +11,21 @@ import { readTutorStream } from "@/lib/tutor/read-stream";
 import { SourceSheet } from "./source-sheet";
 import { LessonAssessment, type AssessmentHistory } from "./lesson-assessment";
 
+type TutorRequest = {
+  requestId: string;
+  message: string;
+  mode: "answer" | "help";
+  expectedSequence: number;
+  expectedStep: number;
+};
+
 export function TutorChat({
   sessionId,
   initialMessages,
+  initialSequence,
+  courseId,
+  nextLesson,
+  initialLessonProgress,
   initiallyReadOnly,
   initiallyActive,
   initialAssessments,
@@ -21,11 +33,19 @@ export function TutorChat({
 }: {
   sessionId: string;
   initialMessages: ChatMessage[];
+  initialSequence: number;
+  courseId: string;
+  nextLesson: { id: string; title: string } | null;
+  initialLessonProgress: { total: number; completed: number; ready: boolean };
   initiallyReadOnly: boolean;
   initiallyActive: boolean;
   initialAssessments: AssessmentHistory;
   initialCompleted: boolean;
 }) {
+  const [sequence, setSequence] = useState(initialSequence);
+  const [mode, setMode] = useState<"answer" | "help">("answer");
+  const [pending, setPending] = useState<TutorRequest | null>(null);
+  const [progress, setProgress] = useState(initialLessonProgress);
   const [messages, setMessages] = useState(initialMessages);
   const [readOnly, setReadOnly] = useState(initiallyReadOnly);
   const [active, setActive] = useState(initiallyActive);
@@ -41,7 +61,7 @@ export function TutorChat({
     if (busy) end.current?.scrollIntoView({ block: "nearest" });
   }, [answer, busy]);
 
-  async function refresh() {
+  async function refresh(request = pending) {
     const response = await fetch(`/api/tutor/sessions/${sessionId}`, {
       cache: "no-store",
     });
@@ -51,10 +71,56 @@ export function TutorChat({
     setMessages(result.messages);
     setReadOnly(result.readOnly);
     setActive(result.active);
+    setProgress(result.lessonProgress);
+    setSequence(result.nextSequence);
+    if (request) {
+      const reply = (result.messages as ChatMessage[]).find(
+        (message) =>
+          message.role === "assistant" &&
+          message.requestId === request.requestId,
+      );
+      if (reply?.status === "complete") {
+        setPending(null);
+        setDraft("");
+        setError(null);
+      } else if (!reply && result.nextSequence !== request.expectedSequence) {
+        setPending(null);
+        setDraft("");
+        setError(
+          "The lesson changed. Read the latest tutor message before answering.",
+        );
+      } else if (
+        reply?.status === "failed" ||
+        (reply?.status === "pending" && !result.active)
+      ) {
+        setPending(null);
+        setDraft(request.message);
+        setMode(request.mode);
+      }
+    }
   }
-  async function send(text: string) {
-    if (sending.current || assessing || active || readOnly || !text.trim())
+  async function send(
+    text: string,
+    requestedMode = mode,
+    retry?: TutorRequest,
+  ) {
+    if (
+      sending.current ||
+      assessing ||
+      active ||
+      readOnly ||
+      (pending && !retry) ||
+      !text.trim()
+    )
       return;
+    const request = retry ?? {
+      requestId: crypto.randomUUID(),
+      message: text.trim(),
+      mode: requestedMode,
+      expectedSequence: sequence,
+      expectedStep: progress.total ? progress.completed : -1,
+    };
+    setPending(request);
     sending.current = true;
     setBusy(true);
     setError(null);
@@ -67,10 +133,7 @@ export function TutorChat({
         {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            requestId: crypto.randomUUID(),
-            message: text.trim(),
-          }),
+          body: JSON.stringify(request),
         },
       );
       if (!response.ok) {
@@ -88,10 +151,10 @@ export function TutorChat({
           ? caught.message
           : "The response was interrupted.",
       );
-      setDraft(text);
+      // Keep this request ID until its saved outcome is known.
     } finally {
       try {
-        await refresh();
+        await refresh(request);
       } catch {
         setError(
           "Could not reload the saved conversation. Refresh before resending your question.",
@@ -133,7 +196,7 @@ export function TutorChat({
           Refresh conversation
         </Button>
       </div>
-      {!messages.length && !busy ? (
+      {!progress.total && !busy ? (
         <Card>
           <CardContent className="flex items-start gap-4 p-5">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-[0.65rem] bg-play-orange text-white shadow-sm">
@@ -141,15 +204,15 @@ export function TutorChat({
             </span>
             <div className="space-y-3">
               <p className="text-sm leading-6 text-muted-foreground">
-                Your tutor will introduce one idea at a time and help you reason
-                through it. You can ask a question or start with a short
-                introduction.
+                Learn one small part at a time and answer a short question after
+                each explanation. Then take a multiple-choice test.
               </p>
               <Button
-                disabled={readOnly || active}
+                disabled={readOnly || active || !!pending}
                 onClick={() => {
                   void send(
                     "Please introduce this lesson and ask me an opening question.",
+                    "answer",
                   );
                 }}
               >
@@ -224,7 +287,7 @@ export function TutorChat({
                     className="size-2 rounded-full bg-play-blue"
                     aria-hidden="true"
                   />
-                  Tutor is responding… Not saved yet.
+                  Tutor is responding…
                 </p>
                 <p className="whitespace-pre-wrap break-words leading-7">
                   {answer}
@@ -249,45 +312,126 @@ export function TutorChat({
           attempts unlock after two minutes.
         </p>
       ) : null}
-      <form onSubmit={submit} className="space-y-3">
-        <Label htmlFor="tutor-message">Your answer or question</Label>
-        <Textarea
-          id="tutor-message"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          maxLength={2000}
-          disabled={busy || assessing || active || readOnly}
-          placeholder="Tell the tutor what you think, or ask for a hint…"
-          className="min-h-28"
-        />
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-muted-foreground">
-            {draft.length}/2,000 · Source-grounded AI can still make mistakes.
+      {progress.total > 0 ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {progress.completed} of {progress.total} lesson questions answered
+          {progress.ready ? " · Ready for the test" : ""}
+        </p>
+      ) : null}
+      {pending && !busy ? (
+        <div role="status" className="space-y-2 rounded-lg border p-4 text-sm">
+          <p>
+            Checking whether your reply was saved. Your lesson will not advance
+            twice.
           </p>
           <Button
-            type="submit"
-            disabled={busy || assessing || active || readOnly || !draft.trim()}
+            variant="outline"
+            disabled={assessing || readOnly}
+            onClick={() => {
+              void refresh().catch(() =>
+                setError(
+                  "Could not check the reply. Try again when connected.",
+                ),
+              );
+            }}
           >
-            {busy ? "Responding…" : "Send"}
+            Check reply
           </Button>
+          {!active ? (
+            <Button
+              variant="outline"
+              disabled={assessing || readOnly}
+              onClick={() => {
+                void send(pending.message, pending.mode, pending);
+              }}
+            >
+              Retry reply
+            </Button>
+          ) : null}
         </div>
-      </form>
+      ) : null}
+      {progress.total > 0 ? (
+        <form onSubmit={submit} className="space-y-3">
+          {!progress.ready ? (
+            <div className="flex gap-2" aria-label="Message type">
+              <Button
+                type="button"
+                variant={mode === "answer" ? "default" : "outline"}
+                aria-pressed={mode === "answer"}
+                disabled={busy || assessing || active || readOnly || !!pending}
+                onClick={() => setMode("answer")}
+              >
+                Answer
+              </Button>
+              <Button
+                type="button"
+                variant={mode === "help" ? "default" : "outline"}
+                aria-pressed={mode === "help"}
+                disabled={busy || assessing || active || readOnly || !!pending}
+                onClick={() => setMode("help")}
+              >
+                Ask for help
+              </Button>
+            </div>
+          ) : null}
+          <Label htmlFor="tutor-message">
+            {progress.ready
+              ? "Review the lesson"
+              : mode === "help"
+                ? "What would you like explained?"
+                : "Your answer"}
+          </Label>
+          <Textarea
+            id="tutor-message"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            maxLength={2000}
+            disabled={busy || assessing || active || readOnly || !!pending}
+            placeholder={
+              progress.ready || mode === "help"
+                ? "Ask about anything you want to understand better…"
+                : "Answer the short question in your own words…"
+            }
+            className="min-h-28"
+          />
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {draft.length}/2,000 · Source-grounded AI can still make mistakes.
+            </p>
+            <Button
+              type="submit"
+              disabled={
+                busy ||
+                assessing ||
+                active ||
+                readOnly ||
+                !!pending ||
+                !draft.trim()
+              }
+            >
+              {busy
+                ? "Responding…"
+                : progress.ready
+                  ? "Send"
+                  : mode === "help"
+                    ? "Send question"
+                    : "Answer and continue"}
+            </Button>
+          </div>
+        </form>
+      ) : null}
       <LessonAssessment
         sessionId={sessionId}
         initialHistory={initialAssessments}
+        courseId={courseId}
+        nextLesson={nextLesson}
         initialCompleted={initialCompleted}
-        disabled={busy}
+        disabled={busy || !!pending}
         readOnly={readOnly}
         active={active}
-        eligible={
-          !active &&
-          messages.filter(
-            (message) =>
-              message.role === "assistant" && message.status === "complete",
-          ).length >= 2
-        }
+        eligible={!active && progress.ready}
         onBusyChange={setAssessing}
-        onSaved={refresh}
+        onSaved={() => refresh()}
       />
     </div>
   );

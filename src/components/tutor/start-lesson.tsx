@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 export function StartLesson({
   lessonId,
   disabled,
+  label = "Start / resume lesson",
 }: {
   lessonId: string;
   disabled: boolean;
+  label?: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -35,7 +37,7 @@ export function StartLesson({
   return (
     <div className="mt-4 space-y-2">
       <Button size="sm" onClick={start} disabled={disabled || busy}>
-        {busy ? "Opening…" : "Start / resume lesson"}
+        {busy ? "Opening…" : label}
       </Button>
       {error ? (
         <p role="alert" className="text-sm text-destructive">

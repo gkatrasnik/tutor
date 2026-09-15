@@ -8,7 +8,7 @@ import { profiles } from "@/db/schema";
 import { env } from "@/lib/env";
 
 import { isAdminEmail, normalizeEmail } from "./authorization";
-import { getAuth } from "./server";
+import { getSessionReader } from "./server";
 
 export type CurrentUser = {
   id: string;
@@ -17,7 +17,7 @@ export type CurrentUser = {
 };
 
 export const getOptionalUser = cache(async (): Promise<CurrentUser | null> => {
-  const { data, error } = await getAuth().getSession();
+  const { data, error } = await getSessionReader().getSession();
 
   if (error || !data?.user?.id || !data.user.email) {
     return null;

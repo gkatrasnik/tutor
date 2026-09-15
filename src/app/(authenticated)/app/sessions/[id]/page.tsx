@@ -1,3 +1,4 @@
+import { lessonProgress } from "@/lib/tutor/lesson";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
@@ -6,6 +7,7 @@ import { TutorChat } from "@/components/tutor/chat";
 import { requireUser } from "@/lib/auth/dal";
 import {
   getTutorMessages,
+  getNextLesson,
   getTutorSession,
   TutorError,
 } from "@/lib/tutor/service";
@@ -28,10 +30,11 @@ export default async function SessionPage({
     if (error instanceof TutorError && error.status === 404) notFound();
     throw error;
   });
-  const [messages, assessments, progress] = await Promise.all([
+  const [messages, assessments, progress, nextLesson] = await Promise.all([
     getTutorMessages(session.id, user.id),
     getAssessmentHistory(session.id, user.id),
     getLessonProgress(user.id, session.courseId),
+    getNextLesson(session.id, user.id),
   ]);
   return (
     <main className="mx-auto max-w-4xl p-5 sm:p-8 lg:p-10">
@@ -42,7 +45,7 @@ export default async function SessionPage({
         ← {session.courseName}
       </Link>
       <p className="mt-8 text-sm font-semibold text-play-blue-foreground">
-        Socratic tutor
+        Lesson tutor
       </p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight">
         {session.lessonTitle}
@@ -54,6 +57,13 @@ export default async function SessionPage({
         key={session.id}
         sessionId={session.id}
         initialMessages={messages}
+        initialSequence={session.nextSequence}
+        courseId={session.courseId}
+        nextLesson={nextLesson}
+        initialLessonProgress={lessonProgress(
+          session.lessonPlan,
+          session.completedChunks,
+        )}
         initiallyReadOnly={session.readOnly}
         initiallyActive={session.active}
         initialAssessments={assessments}

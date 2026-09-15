@@ -7,7 +7,7 @@ import type { AiContext } from "@/lib/usage/contracts";
 import {
   ASSESSMENT_OUTPUT_TOKENS,
   ASSESSMENT_SYSTEM_PROMPT,
-  assessmentResultSchema,
+  quizSchema,
   buildAssessmentPrompt,
   type AssessmentEvidence,
 } from "./contracts";
@@ -31,7 +31,7 @@ export async function generateAssessment(
         abortSignal: signal,
         onStepEnd: recorder.recordMetrics,
         output: Output.object({
-          schema: assessmentResultSchema,
+          schema: quizSchema,
           name: "lesson_assessment",
         }),
         system: ASSESSMENT_SYSTEM_PROMPT,
@@ -40,7 +40,7 @@ export async function generateAssessment(
       recorder.recordMetrics(result);
       if (result.finishReason !== "stop")
         throw new Error("Assessment did not finish.");
-      return assessmentResultSchema.parse(result.output);
+      return quizSchema.parse(result.output);
     },
   });
 }

@@ -38,23 +38,20 @@ describe("assessment presentation", () => {
   it("renders persisted feedback, a score, and completion", () => {
     const html = render();
     for (const text of [
-      "Finish lesson",
+      "Test again",
       "Lesson complete",
-      "70/100",
-      "Strengths",
-      "Explains attention",
-      "Knowledge gaps",
-      "Recommended next step",
+      "70%",
+
       "Apply it to studying",
     ])
       expect(html).toContain(text);
-    expect(html).toContain('aria-valuenow="70"');
+    expect(html).toContain("50% correct");
   });
   it("disables finishing for archived sessions without claiming current completion", () => {
     const html = render({ readOnly: true });
     expect(html).toContain("Previous course version");
     expect(html).not.toContain("Lesson complete");
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>Finish lesson<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Test<\/button>/);
   });
   it("shows an honest empty state and disables assessment before enough exchanges", () => {
     const html = render({
@@ -62,10 +59,10 @@ describe("assessment presentation", () => {
       eligible: false,
       initialCompleted: false,
     });
-    expect(html).toContain("No assessments yet");
-    expect(html).toContain("First complete at least two exchanges");
+    expect(html).toContain("No tests yet");
+    expect(html).toContain("Answer the short question for every lesson part");
     expect(html).not.toContain("Lesson complete");
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>Finish lesson<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Test<\/button>/);
   });
   it("renders failed attempts safely and exposes history pagination", () => {
     const html = render({
@@ -83,8 +80,41 @@ describe("assessment presentation", () => {
       },
     });
     expect(html).toContain("Failed");
-    expect(html).toContain("Older assessments");
+    expect(html).toContain("Older tests");
     expect(html).not.toContain("<script>private()");
     expect(html).toContain("&lt;script&gt;");
   });
+});
+
+it("shows post-test explanations and the next lesson action", () => {
+  const html = render({
+    nextLesson: { id: "next", title: "Next topic" },
+    initialHistory: {
+      items: [
+        {
+          ...item,
+          review: [
+            {
+              question: "What helps?",
+              options: ["Focus", "Noise", "Interruptions", "Distraction"],
+              selectedOption: 1,
+              correctOption: 0,
+              explanation: "Focus helps learning.",
+            },
+          ],
+        },
+      ],
+      hasMore: false,
+    },
+  });
+  expect(html).toContain("Next lesson");
+  expect(html).toContain("Test again");
+  expect(html).toContain("Review answers");
+  expect(html).toContain("Correct answer: A. Focus");
+  expect(html).toContain("Focus helps learning.");
+});
+it("links back to the course after the last lesson", () => {
+  const html = render({ courseId: "course", nextLesson: null });
+  expect(html).toContain('href="/app/courses/course"');
+  expect(html).toContain("Back to course");
 });

@@ -1,3 +1,4 @@
+import { lessonProgress } from "@/lib/tutor/lesson";
 import { z } from "zod";
 
 import { requireUser } from "@/lib/auth/dal";
@@ -23,6 +24,11 @@ export async function GET(
         messages: await getTutorMessages(id.data, user.id),
         readOnly: session.readOnly,
         active: session.active,
+        nextSequence: session.nextSequence,
+        lessonProgress: lessonProgress(
+          session.lessonPlan,
+          session.completedChunks,
+        ),
       },
       { headers: { "Cache-Control": "no-store" } },
     );

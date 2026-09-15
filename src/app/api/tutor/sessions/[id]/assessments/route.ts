@@ -1,7 +1,14 @@
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/dal";
-import { assessmentInputSchema } from "@/lib/assessments/contracts";
-import { assessLesson, getAssessmentHistory } from "@/lib/assessments/service";
+import {
+  assessmentInputSchema,
+  quizSubmissionSchema,
+} from "@/lib/assessments/contracts";
+import {
+  assessLesson,
+  getAssessmentHistory,
+  submitQuiz,
+} from "@/lib/assessments/service";
 import { logServerError } from "@/lib/observability/logger";
 import { TutorError } from "@/lib/tutor/service";
 import { enforceAiRateLimit } from "@/lib/usage/rate-limit";
@@ -88,5 +95,48 @@ export async function POST(request: Request, context: Context) {
     );
   } catch (error) {
     return failure(error, "assessment.create.failed");
+  }
+}
+
+export async function PUT(request: Request, context: Context) {
+  const user = await requireUser();
+  const id = z.uuid().safeParse((await context.params).id);
+  if (!id.success)
+    return Response.json({ error: "Invalid session ID." }, { status: 400 });
+  const raw = await request.text();
+  if (raw.length > 1000)
+    return Response.json(
+      { error: "Test submission is too large." },
+      { status: 413 },
+    );
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return Response.json(
+      { error: "Invalid test submission." },
+      { status: 400 },
+    );
+  }
+  const input = quizSubmissionSchema.safeParse(body);
+  if (!input.success)
+    return Response.json(
+      {
+        error: "Send the test ID and one A–D option index for every question.",
+      },
+      { status: 400 },
+    );
+  try {
+    return Response.json(
+      await submitQuiz(
+        id.data,
+        user.id,
+        input.data.assessmentId,
+        input.data.answers,
+      ),
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch (error) {
+    return failure(error, "assessment.submit.failed");
   }
 }

@@ -43,6 +43,11 @@ export async function POST(
       user.id,
       input.data.requestId,
       input.data.message,
+      {
+        mode: input.data.mode,
+        expectedSequence: input.data.expectedSequence,
+        expectedStep: input.data.expectedStep,
+      },
     );
     if ("replay" in turn)
       return new Response(

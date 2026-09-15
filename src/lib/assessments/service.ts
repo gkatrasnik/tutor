@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, exists, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, exists, sql } from "drizzle-orm";
 import type { LanguageModel } from "ai";
 import { db } from "@/db";
 import {
@@ -15,10 +15,12 @@ import { retrieveCourseChunks } from "@/lib/rag/retrieval";
 import { TUTOR_LEASE_MS } from "@/lib/tutor/contracts";
 import { getTutorSession, TutorError } from "@/lib/tutor/service";
 import {
-  ASSESSMENT_HISTORY_MESSAGES,
   ASSESSMENT_TIMEOUT_MS,
   COMPLETION_SCORE,
-  assessmentResultSchema,
+  quizSchema,
+  publicQuiz,
+  gradeQuiz,
+  quizReview,
   type AssessmentSummary,
 } from "./contracts";
 import { generateAssessment } from "./generation";
@@ -41,6 +43,8 @@ export async function getAssessmentHistory(
       nextStep: lessonAssessments.nextStep,
       error: lessonAssessments.error,
       createdAt: lessonAssessments.createdAt,
+      quiz: lessonAssessments.quiz,
+      answers: lessonAssessments.answers,
     })
     .from(lessonAssessments)
     .where(
@@ -54,7 +58,22 @@ export async function getAssessmentHistory(
     .offset(offset);
   return {
     items: rows.slice(0, HISTORY_PAGE_SIZE).map((row): AssessmentSummary => ({
-      ...row,
+      id: row.id,
+      status: row.status,
+      score: row.score,
+      strengths: row.strengths,
+      gaps: row.gaps,
+      nextStep: row.nextStep,
+      error: row.error,
+      review:
+        row.status === "complete" && row.quiz && row.answers
+          ? quizReview(row.quiz, row.answers)
+          : null,
+      passingScore: row.quiz ? COMPLETION_SCORE : 70,
+      quiz:
+        row.quiz && row.status === "pending"
+          ? publicQuiz(row.id, row.quiz)
+          : null,
       createdAt: row.createdAt.toISOString(),
     })),
     hasMore: rows.length > HISTORY_PAGE_SIZE,
@@ -73,7 +92,7 @@ export async function getLessonProgress(ownerId: string, courseId?: string) {
     where ${lessonAssessments.ownerId} = ${ownerId} and ${tutorSessions.ownerId} = ${ownerId}
       and ${tutorSessions.lessonId} = ${lessons.id} and ${tutorSessions.courseId} = ${courses.id}
       and ${tutorSessions.sourceVersion} = ${courses.outlineVersion} and ${courses.outlineVersion} = ${courses.sourceVersion}
-      and ${courses.status} = 'ready' and ${lessonAssessments.status} = 'complete' and ${lessonAssessments.score} >= ${COMPLETION_SCORE}
+      and ${courses.status} = 'ready' and ${lessonAssessments.status} = 'complete' and ${lessonAssessments.score} >= case when ${lessonAssessments.quiz} is null then 70 else ${COMPLETION_SCORE} end
   )`,
     })
     .from(lessons)
@@ -95,7 +114,11 @@ export async function assessLesson(
 ) {
   const session = await getTutorSession(sessionId, ownerId);
   const [prior] = await db
-    .select({ id: lessonAssessments.id, status: lessonAssessments.status })
+    .select({
+      id: lessonAssessments.id,
+      status: lessonAssessments.status,
+      quiz: lessonAssessments.quiz,
+    })
     .from(lessonAssessments)
     .where(
       and(
@@ -105,74 +128,40 @@ export async function assessLesson(
       ),
     )
     .limit(1);
-  if (prior?.status === "complete") return { id: prior.id };
+  if (session.readOnly)
+    throw new TutorError("This lesson has changed. Start a current lesson.");
+  if (prior?.quiz && prior.status === "pending")
+    return publicQuiz(prior.id, prior.quiz);
   if (prior)
     throw new TutorError(
       "This assessment is running or its attempt failed. Refresh the history before trying again.",
-    );
-  if (session.readOnly)
-    throw new TutorError(
-      "This conversation is read-only. Start a current lesson from the course to be assessed.",
     );
   if (session.active)
     throw new TutorError(
       "A response or assessment is already running. Refresh shortly.",
     );
 
-  // Only learner messages paired with successful tutor replies are evidence.
-  const transcript = (
-    await db
-      .select({
-        id: messages.id,
-        role: messages.role,
-        content: messages.content,
-        ordinal: messages.ordinal,
-      })
-      .from(messages)
-      .where(
-        and(
-          eq(messages.sessionId, sessionId),
-          eq(messages.ownerId, ownerId),
-          eq(messages.status, "complete"),
-          inArray(
-            messages.requestId,
-            db
-              .select({ requestId: messages.requestId })
-              .from(messages)
-              .where(
-                and(
-                  eq(messages.sessionId, sessionId),
-                  eq(messages.ownerId, ownerId),
-                  eq(messages.role, "assistant"),
-                  eq(messages.status, "complete"),
-                ),
-              ),
-          ),
-        ),
-      )
-      .orderBy(desc(messages.ordinal))
-      .limit(ASSESSMENT_HISTORY_MESSAGES)
-  ).reverse();
-  if (transcript.filter((message) => message.role === "user").length < 2) {
+  if (
+    !session.lessonPlan ||
+    session.completedChunks !== session.lessonPlan.chunks.length
+  )
     throw new TutorError(
-      "Have at least two exchanges with the tutor first, including an answer in your own words.",
+      "Answer the short question for every lesson part before taking the test.",
     );
-  }
-  const throughOrdinal = transcript.at(-1)!.ordinal;
-  const [existing] = await db
-    .select({ id: lessonAssessments.id })
+  const [ready] = await db
+    .select({ id: lessonAssessments.id, quiz: lessonAssessments.quiz })
     .from(lessonAssessments)
     .where(
       and(
         eq(lessonAssessments.sessionId, sessionId),
         eq(lessonAssessments.ownerId, ownerId),
-        eq(lessonAssessments.throughOrdinal, throughOrdinal),
-        eq(lessonAssessments.status, "complete"),
+        eq(lessonAssessments.status, "pending"),
+        sql`${lessonAssessments.quiz} is not null`,
       ),
     )
     .limit(1);
-  if (existing) return { id: existing.id };
-
+  if (ready?.quiz) return publicQuiz(ready.id, ready.quiz);
+  const throughOrdinal = Math.max(0, session.nextSequence - 1);
   const token = crypto.randomUUID();
   // Share the tutor's session lease, so assessment and chat cannot race. The
   // sequence comparison also detects a new turn between reading and claiming.
@@ -186,17 +175,17 @@ export async function assessLesson(
           and ${courses.status} = 'ready' and ${courses.sourceVersion} = ${session.sourceVersion} and ${courses.outlineVersion} = ${session.sourceVersion})
         and not exists (select 1 from ${lessonAssessments} where ${lessonAssessments.sessionId} = ${sessionId}
           and ${lessonAssessments.ownerId} = ${ownerId} and (${lessonAssessments.requestId} = ${requestId}
-            or (${lessonAssessments.throughOrdinal} = ${throughOrdinal} and ${lessonAssessments.status} = 'complete')))
+            or (${lessonAssessments.quiz} is not null and ${lessonAssessments.status} = 'pending')))
       returning id
     ), interrupted_messages as (
       update ${messages} set status = 'failed', error = 'This response was interrupted. Please send your question again.'
       from claimed where ${messages.sessionId} = claimed.id and ${messages.ownerId} = ${ownerId} and ${messages.status} = 'pending'
     ), interrupted_assessments as (
       update ${lessonAssessments} set status = 'failed', error = 'This assessment was interrupted. Please try again.'
-      from claimed where ${lessonAssessments.sessionId} = claimed.id and ${lessonAssessments.ownerId} = ${ownerId} and ${lessonAssessments.status} = 'pending'
+      from claimed where ${lessonAssessments.sessionId} = claimed.id and ${lessonAssessments.ownerId} = ${ownerId} and ${lessonAssessments.status} = 'pending' and ${lessonAssessments.quiz} is null
     )
     insert into ${lessonAssessments} (id,session_id,owner_id,request_id,through_ordinal,message_ids)
-    select ${token}::uuid, claimed.id, ${ownerId}, ${requestId}::uuid, ${throughOrdinal}, ${JSON.stringify(transcript.map((message) => message.id))}::jsonb from claimed
+    select ${token}::uuid, claimed.id, ${ownerId}, ${requestId}::uuid, ${throughOrdinal}, ${JSON.stringify([])}::jsonb from claimed
     returning id
   `);
   if (!claimed.rows.length)
@@ -221,27 +210,25 @@ export async function assessLesson(
     ),
   );
   try {
-    // A claim statement may have waited for a publishing transaction's row
-    // lock while retaining its earlier MVCC snapshot. Recheck with a fresh
-    // snapshot before any billable work, even after successfully claiming.
+    // A competing generation may have published while this claim waited for
+    // the session lock. Recheck with a fresh snapshot before billable work.
     const [published] = await db
-      .select({ id: lessonAssessments.id })
+      .select({ id: lessonAssessments.id, quiz: lessonAssessments.quiz })
       .from(lessonAssessments)
       .where(
         and(
           eq(lessonAssessments.sessionId, sessionId),
           eq(lessonAssessments.ownerId, ownerId),
-          eq(lessonAssessments.throughOrdinal, throughOrdinal),
-          eq(lessonAssessments.status, "complete"),
+          eq(lessonAssessments.status, "pending"),
+          sql`${lessonAssessments.quiz} is not null`,
         ),
       )
       .limit(1);
-    if (published) {
+    if (published?.quiz) {
       await db.batch([
         db.execute(
           sql`select id from ${tutorSessions} where ${sessionGuard} for update`,
         ),
-        // Discard only this unused claim; no assessment/provider work occurred.
         db.delete(lessonAssessments).where(assessmentGuard),
         db
           .update(tutorSessions)
@@ -252,29 +239,28 @@ export async function assessLesson(
           })
           .where(sessionGuard),
       ]);
-      return { id: published.id };
+      return publicQuiz(published.id, published.quiz);
     }
     const signal = AbortSignal.timeout(ASSESSMENT_TIMEOUT_MS);
     const usage = { ownerId, requestId };
-    const chunks = await retrieveCourseChunks({
-      ownerId,
-      courseId: session.courseId,
-      query: `${session.objective}\n${session.retrievalQuery}`,
-      signal,
-      usage,
-    });
+    const chunks =
+      session.lessonPlan.sources ??
+      (await retrieveCourseChunks({
+        ownerId,
+        courseId: session.courseId,
+        query: `${session.objective}\n${session.retrievalQuery}`,
+        signal,
+        usage,
+      }));
     if (!chunks.length)
       throw new TutorError(
         "No indexed sources support this assessment. Check the course materials before trying again.",
       );
-    const result = assessmentResultSchema.parse(
+    const result = quizSchema.parse(
       await generateAssessment(
         {
           lesson: { title: session.lessonTitle, objective: session.objective },
-          conversation: transcript.map(({ role, content }) => ({
-            role,
-            content,
-          })),
+          chunks: session.lessonPlan.chunks,
           sources: chunks.map(({ filename, pageNumber, content }) => ({
             filename,
             pageNumber,
@@ -315,8 +301,7 @@ export async function assessLesson(
       db
         .update(lessonAssessments)
         .set({
-          ...result,
-          status: "complete",
+          quiz: result,
           retrievedChunkIds: chunks.map((chunk) => chunk.id),
         })
         .where(current)
@@ -334,7 +319,7 @@ export async function assessLesson(
       throw new TutorError(
         "The course changed or this attempt was superseded. No completion was recorded; refresh and try again.",
       );
-    return { id: token };
+    return publicQuiz(token, result);
   } catch (error) {
     if (!(error instanceof TutorError))
       logServerError("assessment.generation.failed", error, {
@@ -375,4 +360,88 @@ export async function assessLesson(
       error instanceof TutorError ? error.status : 502,
     );
   }
+}
+
+export async function submitQuiz(
+  sessionId: string,
+  ownerId: string,
+  assessmentId: string,
+  answers: number[],
+) {
+  const session = await getTutorSession(sessionId, ownerId);
+  if (session.readOnly)
+    throw new TutorError("This lesson has changed. Start a current lesson.");
+  const guard = and(
+    eq(lessonAssessments.id, assessmentId),
+    eq(lessonAssessments.sessionId, sessionId),
+    eq(lessonAssessments.ownerId, ownerId),
+  );
+  const [attempt] = await db
+    .select()
+    .from(lessonAssessments)
+    .where(guard)
+    .limit(1);
+  if (!attempt?.quiz) throw new TutorError("Test not found.", 404);
+  if (attempt.status === "failed") throw new TutorError("Start another test.");
+  if (attempt.status === "complete")
+    return {
+      id: attempt.id,
+      ...gradeQuiz(attempt.quiz, attempt.answers!),
+      review: quizReview(attempt.quiz, attempt.answers!),
+    };
+  if (answers.length !== attempt.quiz.questions.length)
+    throw new TutorError("Answer every question before submitting.", 400);
+  const result = gradeQuiz(attempt.quiz, answers);
+  const courseGuard = and(
+    eq(courses.id, session.courseId),
+    eq(courses.ownerId, ownerId),
+    eq(courses.status, "ready"),
+    eq(courses.sourceVersion, session.sourceVersion),
+    eq(courses.outlineVersion, session.sourceVersion),
+  );
+  const saved = await db.batch([
+    db.execute(sql`select id from ${courses} where ${courseGuard} for update`),
+    db
+      .update(lessonAssessments)
+      .set({
+        status: "complete",
+        answers,
+        score: result.score,
+        nextStep: result.passed
+          ? "Test passed. Continue to the next lesson."
+          : "Review the lesson and take the test again.",
+      })
+      .where(
+        and(
+          guard,
+          eq(lessonAssessments.status, "pending"),
+          exists(
+            db.select({ id: courses.id }).from(courses).where(courseGuard),
+          ),
+        ),
+      )
+      .returning({ id: lessonAssessments.id }),
+  ]);
+  if (!saved[1].length) {
+    const current = await getTutorSession(sessionId, ownerId);
+    if (current.readOnly)
+      throw new TutorError("The course changed. No result was recorded.");
+    const [finished] = await db
+      .select()
+      .from(lessonAssessments)
+      .where(guard)
+      .limit(1);
+    if (finished?.status === "complete")
+      return {
+        id: finished.id,
+        ...gradeQuiz(finished.quiz!, finished.answers!),
+        review: quizReview(finished.quiz!, finished.answers!),
+      };
+    throw new TutorError("This test changed. Refresh and try again.");
+  }
+  return {
+    id: assessmentId,
+    ...result,
+    review: quizReview(attempt.quiz, answers),
+  };
 }

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, exists, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gt, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -40,6 +40,8 @@ export async function getTutorSession(sessionId: string, ownerId: string) {
       retrievalQuery: tutorSessions.retrievalQuery,
       sourceVersion: tutorSessions.sourceVersion,
       nextSequence: tutorSessions.nextSequence,
+      lessonPlan: tutorSessions.lessonPlan,
+      completedChunks: tutorSessions.completedChunks,
       activeStartedAt: tutorSessions.activeStartedAt,
       activeToken: tutorSessions.activeToken,
       courseName: courses.name,
@@ -112,6 +114,7 @@ export async function getTutorMessages(
   const rows = await db
     .select({
       id: messages.id,
+      requestId: messages.requestId,
       role: messages.role,
       status: messages.status,
       content: messages.content,
@@ -183,6 +186,11 @@ export type PreparedTurn = {
   message: string;
   requestId: string;
   reservationId?: string;
+  mode?: "answer" | "help";
+  lessonUpdate?: {
+    lessonPlan: import("./lesson").LessonPlan;
+    completedChunks: number;
+  };
   history: { role: "user" | "assistant"; content: string }[];
 };
 
@@ -191,6 +199,11 @@ export async function prepareTutorTurn(
   ownerId: string,
   requestId: string,
   message: string,
+  options: {
+    mode?: "answer" | "help";
+    expectedSequence?: number;
+    expectedStep?: number;
+  } = {},
 ): Promise<PreparedTurn | { replay: string }> {
   const session = await getTutorSession(sessionId, ownerId);
   const prior = await db
@@ -223,11 +236,23 @@ export async function prepareTutorTurn(
     throw new TutorError(
       "This session is read-only because the course sources or outline changed. Open a current lesson from the course.",
     );
+  const expectedSequence = options.expectedSequence ?? session.nextSequence;
+  const expectedStep =
+    options.expectedStep ?? (session.lessonPlan ? session.completedChunks : -1);
+  if (
+    expectedSequence !== session.nextSequence ||
+    expectedStep !== (session.lessonPlan ? session.completedChunks : -1)
+  )
+    throw new TutorError(
+      "The lesson moved forward. Refresh to see the saved reply before sending another answer.",
+    );
   const token = crypto.randomUUID();
   const claimed = await db.execute(sql`
     with claimed as (
       update ${tutorSessions} set active_token = ${token}, active_started_at = now(), next_sequence = next_sequence + 2, updated_at = now()
       where id = ${sessionId} and owner_id = ${ownerId} and lesson_id is not null
+        and next_sequence = ${expectedSequence}
+        and (case when lesson_plan is null then -1 else completed_chunks end) = ${expectedStep}
         and (active_token is null or active_started_at < now() - ${TUTOR_LEASE_MS} * interval '1 millisecond')
         and exists (select 1 from ${courses} where ${courses.id} = ${session.courseId} and ${courses.ownerId} = ${ownerId}
           and ${courses.status} = 'ready' and ${courses.sourceVersion} = ${session.sourceVersion} and ${courses.outlineVersion} = ${session.sourceVersion})
@@ -237,7 +262,7 @@ export async function prepareTutorTurn(
       from claimed where ${messages.sessionId} = claimed.id and ${messages.ownerId} = ${ownerId} and ${messages.status} = 'pending'
     ), interrupted_assessments as (
       update ${lessonAssessments} set status = 'failed', error = 'This assessment was interrupted. Please try again.'
-      from claimed where ${lessonAssessments.sessionId} = claimed.id and ${lessonAssessments.ownerId} = ${ownerId} and ${lessonAssessments.status} = 'pending'
+      from claimed where ${lessonAssessments.sessionId} = claimed.id and ${lessonAssessments.ownerId} = ${ownerId} and ${lessonAssessments.status} = 'pending' and ${lessonAssessments.quiz} is null
     )
     insert into ${messages} (session_id, owner_id, request_id, ordinal, role, status, content)
     select claimed.id, ${ownerId}, ${requestId}::uuid, claimed.next_sequence - 2 + item.position,
@@ -260,6 +285,7 @@ export async function prepareTutorTurn(
     message,
     history: [],
     requestId,
+    mode: options.mode ?? "answer",
   };
   try {
     const recent = await db
@@ -385,11 +411,40 @@ export async function completeTutorTurn(
       .returning({ id: messages.id }),
     db
       .update(tutorSessions)
-      .set({ activeToken: null, activeStartedAt: null, updatedAt: sql`now()` })
+      .set({
+        ...turn.lessonUpdate,
+        activeToken: null,
+        activeStartedAt: null,
+        updatedAt: sql`now()`,
+      })
       .where(guard),
   ]);
   if (saved[2].length !== 1)
     throw new TutorError(
       "The course changed or this response was superseded. The answer was not saved; refresh the conversation.",
     );
+}
+
+export async function getNextLesson(sessionId: string, ownerId: string) {
+  const session = await getTutorSession(sessionId, ownerId);
+  if (session.readOnly || !session.lessonId) return null;
+  const [current] = await db
+    .select({ ordinal: lessons.ordinal })
+    .from(lessons)
+    .where(and(eq(lessons.id, session.lessonId), eq(lessons.ownerId, ownerId)))
+    .limit(1);
+  if (!current) return null;
+  const [next] = await db
+    .select({ id: lessons.id, title: lessons.title })
+    .from(lessons)
+    .where(
+      and(
+        eq(lessons.courseId, session.courseId),
+        eq(lessons.ownerId, ownerId),
+        gt(lessons.ordinal, current.ordinal),
+      ),
+    )
+    .orderBy(asc(lessons.ordinal))
+    .limit(1);
+  return next ?? null;
 }
