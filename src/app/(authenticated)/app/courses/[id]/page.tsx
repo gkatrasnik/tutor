@@ -6,6 +6,7 @@ import { z } from "zod";
 import { CourseLearningPath } from "@/components/courses/course-learning-path";
 import { CourseMaterialsPanel } from "@/components/courses/course-materials-panel";
 import { CourseOutlineStatus } from "@/components/courses/course-outline-status";
+import { DeleteCourse } from "@/components/courses/delete-course";
 import { MaterialList } from "@/components/courses/material-list";
 import { getLearnerQuotas } from "@/lib/analytics/service";
 import { db } from "@/db";
@@ -131,9 +132,12 @@ export default async function CoursePage({
       <Link href="/app" className="text-sm text-primary hover:underline">
         ← All courses
       </Link>
-      <h1 className="mt-6 break-words text-3xl font-semibold tracking-tight">
-        {course.name}
-      </h1>
+      <div className="mt-6 flex flex-wrap items-start justify-between gap-4">
+        <h1 className="break-words text-3xl font-semibold tracking-tight">
+          {course.name}
+        </h1>
+        <DeleteCourse courseId={course.id} courseName={course.name} />
+      </div>
       {hasOutline ? (
         course.summary ? (
           <details open className="mt-3 text-sm text-muted-foreground">

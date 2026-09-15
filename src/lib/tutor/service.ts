@@ -186,7 +186,7 @@ export type PreparedTurn = {
   message: string;
   requestId: string;
   reservationId?: string;
-  mode?: "answer" | "help";
+  action?: "message" | "continue";
   lessonUpdate?: {
     lessonPlan: import("./lesson").LessonPlan;
     completedChunks: number;
@@ -200,7 +200,7 @@ export async function prepareTutorTurn(
   requestId: string,
   message: string,
   options: {
-    mode?: "answer" | "help";
+    action?: "message" | "continue";
     expectedSequence?: number;
     expectedStep?: number;
   } = {},
@@ -247,6 +247,16 @@ export async function prepareTutorTurn(
       "The lesson moved forward. Refresh to see the saved reply before sending another answer.",
     );
   const token = crypto.randomUUID();
+  if (
+    options.action === "continue" &&
+    (!session.lessonPlan?.awaitingContinue ||
+      session.completedChunks >= session.lessonPlan.chunks.length ||
+      options.expectedSequence === undefined ||
+      options.expectedStep === undefined)
+  )
+    throw new TutorError(
+      "Read the current part and send your answer before continuing.",
+    );
   const claimed = await db.execute(sql`
     with claimed as (
       update ${tutorSessions} set active_token = ${token}, active_started_at = now(), next_sequence = next_sequence + 2, updated_at = now()
@@ -285,7 +295,7 @@ export async function prepareTutorTurn(
     message,
     history: [],
     requestId,
-    mode: options.mode ?? "answer",
+    action: options.action ?? "message",
   };
   try {
     const recent = await db
@@ -317,7 +327,8 @@ export async function prepareTutorTurn(
       .limit(TUTOR_HISTORY_MESSAGES);
     turn.history = recent.reverse();
     // Reserve before retrieval (which itself calls the embedding provider).
-    turn.reservationId = await reserveDailyQuota(ownerId, "tutor");
+    if (turn.action !== "continue")
+      turn.reservationId = await reserveDailyQuota(ownerId, "tutor");
     return turn;
   } catch (error) {
     await failTutorTurn(

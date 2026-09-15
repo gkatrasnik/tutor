@@ -60,7 +60,11 @@ describe("tutor streaming route boundaries", () => {
       "owner",
       requestId,
       "Hello",
-      { mode: "answer", expectedSequence: undefined, expectedStep: undefined },
+      {
+        action: "message",
+        expectedSequence: undefined,
+        expectedStep: undefined,
+      },
     );
     expect(mocks.stream).toHaveBeenCalledExactlyOnceWith(turn);
     expect(mocks.after.mock.calls[0][0]()).toBe(completion);
@@ -86,14 +90,14 @@ describe("tutor streaming route boundaries", () => {
   });
 });
 
-it("passes help and the displayed lesson state to the server", async () => {
+it("passes Continue and the displayed lesson state to the server", async () => {
   mocks.prepare.mockResolvedValue({ replay: "answer-id" });
   const requestId = crypto.randomUUID();
   await POST(
     request({
       requestId,
-      message: "Explain this",
-      mode: "help",
+      message: "Continue",
+      action: "continue",
       expectedSequence: 4,
       expectedStep: 1,
     }),
@@ -103,11 +107,11 @@ it("passes help and the displayed lesson state to the server", async () => {
     sessionId,
     "owner",
     requestId,
-    "Explain this",
-    { mode: "help", expectedSequence: 4, expectedStep: 1 },
+    "Continue",
+    { action: "continue", expectedSequence: 4, expectedStep: 1 },
   );
   for (const invalid of [
-    { mode: "skip" },
+    { action: "skip" },
     { expectedSequence: -1 },
     { expectedStep: 7 },
   ])

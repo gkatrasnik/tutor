@@ -14,7 +14,7 @@ import { LessonAssessment, type AssessmentHistory } from "./lesson-assessment";
 type TutorRequest = {
   requestId: string;
   message: string;
-  mode: "answer" | "help";
+  action: "message" | "continue";
   expectedSequence: number;
   expectedStep: number;
 };
@@ -36,14 +36,18 @@ export function TutorChat({
   initialSequence: number;
   courseId: string;
   nextLesson: { id: string; title: string } | null;
-  initialLessonProgress: { total: number; completed: number; ready: boolean };
+  initialLessonProgress: {
+    total: number;
+    completed: number;
+    ready: boolean;
+    awaitingContinue?: boolean;
+  };
   initiallyReadOnly: boolean;
   initiallyActive: boolean;
   initialAssessments: AssessmentHistory;
   initialCompleted: boolean;
 }) {
   const [sequence, setSequence] = useState(initialSequence);
-  const [mode, setMode] = useState<"answer" | "help">("answer");
   const [pending, setPending] = useState<TutorRequest | null>(null);
   const [progress, setProgress] = useState(initialLessonProgress);
   const [messages, setMessages] = useState(initialMessages);
@@ -81,7 +85,7 @@ export function TutorChat({
       );
       if (reply?.status === "complete") {
         setPending(null);
-        setDraft("");
+        if (request.action === "message") setDraft("");
         setError(null);
       } else if (!reply && result.nextSequence !== request.expectedSequence) {
         setPending(null);
@@ -94,14 +98,13 @@ export function TutorChat({
         (reply?.status === "pending" && !result.active)
       ) {
         setPending(null);
-        setDraft(request.message);
-        setMode(request.mode);
+        if (request.action === "message") setDraft(request.message);
       }
     }
   }
   async function send(
     text: string,
-    requestedMode = mode,
+    action: TutorRequest["action"] = "message",
     retry?: TutorRequest,
   ) {
     if (
@@ -116,7 +119,7 @@ export function TutorChat({
     const request = retry ?? {
       requestId: crypto.randomUUID(),
       message: text.trim(),
-      mode: requestedMode,
+      action,
       expectedSequence: sequence,
       expectedStep: progress.total ? progress.completed : -1,
     };
@@ -126,7 +129,7 @@ export function TutorChat({
     setError(null);
     setQuestion(text.trim());
     setAnswer("");
-    setDraft("");
+    if (request.action === "message") setDraft("");
     try {
       const response = await fetch(
         `/api/tutor/sessions/${sessionId}/messages`,
@@ -210,10 +213,7 @@ export function TutorChat({
               <Button
                 disabled={readOnly || active || !!pending}
                 onClick={() => {
-                  void send(
-                    "Please introduce this lesson and ask me an opening question.",
-                    "answer",
-                  );
+                  void send("Begin lesson");
                 }}
               >
                 Begin lesson
@@ -342,7 +342,7 @@ export function TutorChat({
               variant="outline"
               disabled={assessing || readOnly}
               onClick={() => {
-                void send(pending.message, pending.mode, pending);
+                void send(pending.message, pending.action, pending);
               }}
             >
               Retry reply
@@ -352,51 +352,53 @@ export function TutorChat({
       ) : null}
       {progress.total > 0 ? (
         <form onSubmit={submit} className="space-y-3">
-          {!progress.ready ? (
-            <div className="flex gap-2" aria-label="Message type">
+          {progress.awaitingContinue ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+              <p className="text-sm text-muted-foreground">
+                Continue when you’re ready for the next part, or ask for more
+                explanation below.
+              </p>
               <Button
                 type="button"
-                variant={mode === "answer" ? "default" : "outline"}
-                aria-pressed={mode === "answer"}
                 disabled={busy || assessing || active || readOnly || !!pending}
-                onClick={() => setMode("answer")}
+                onClick={() => {
+                  void send("Continue", "continue");
+                }}
               >
-                Answer
-              </Button>
-              <Button
-                type="button"
-                variant={mode === "help" ? "default" : "outline"}
-                aria-pressed={mode === "help"}
-                disabled={busy || assessing || active || readOnly || !!pending}
-                onClick={() => setMode("help")}
-              >
-                Ask for help
+                Continue
               </Button>
             </div>
           ) : null}
           <Label htmlFor="tutor-message">
-            {progress.ready
-              ? "Review the lesson"
-              : mode === "help"
-                ? "What would you like explained?"
-                : "Your answer"}
+            {progress.ready ? "Review the lesson" : "Your message"}
           </Label>
           <Textarea
             id="tutor-message"
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
             maxLength={2000}
             disabled={busy || assessing || active || readOnly || !!pending}
             placeholder={
-              progress.ready || mode === "help"
+              progress.ready || progress.awaitingContinue
                 ? "Ask about anything you want to understand better…"
-                : "Answer the short question in your own words…"
+                : "Answer or ask for an explanation…"
             }
             className="min-h-28"
           />
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs text-muted-foreground">
-              {draft.length}/2,000 · Source-grounded AI can still make mistakes.
+              {draft.length}/2,000 · Enter to send · Shift + Enter for a new
+              line · Source-grounded AI can still make mistakes.
             </p>
             <Button
               type="submit"
@@ -409,13 +411,7 @@ export function TutorChat({
                 !draft.trim()
               }
             >
-              {busy
-                ? "Responding…"
-                : progress.ready
-                  ? "Send"
-                  : mode === "help"
-                    ? "Send question"
-                    : "Answer and continue"}
+              {busy ? "Responding…" : "Send"}
             </Button>
           </div>
         </form>

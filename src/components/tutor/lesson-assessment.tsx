@@ -126,6 +126,12 @@ export function LessonAssessment({
       setResult(null);
     });
   }
+  function selectAnswer(index: number) {
+    setAnswers((current) =>
+      current.map((answer, position) => (position === step ? index : answer)),
+    );
+    if (quiz && step < quiz.questions.length - 1) setStep(step + 1);
+  }
   async function finish() {
     if (!quiz || locked || answers.some((answer) => answer === null)) return;
     await run(async () => {
@@ -198,18 +204,12 @@ export function LessonAssessment({
                     name={`question-${step}`}
                     value={index}
                     checked={answers[step] === index}
-                    onChange={() =>
-                      setAnswers((current) =>
-                        current.map((answer, position) =>
-                          position === step ? index : answer,
-                        ),
-                      )
-                    }
+                    onChange={() => selectAnswer(index)}
                     className="mt-1"
                   />
                   <span>
                     <span className="font-semibold">{"ABCD"[index]}.</span>{" "}
-                    {option}
+                    {answerText(option)}
                   </span>
                 </label>
               ))}
@@ -341,17 +341,32 @@ function AnswerReview({ review }: { review: QuizReview | undefined }) {
             <p className="font-medium">
               {index + 1}. {item.question}
             </p>
-            <p className="mt-2">
-              Your answer: {"ABCD"[item.selectedOption]}.{" "}
-              {item.options[item.selectedOption]} ·{" "}
-              {item.selectedOption === item.correctOption
-                ? "Correct"
-                : "Incorrect"}
+            <p className="mt-2 flex flex-wrap items-center gap-2">
+              <span>
+                Your answer: {"ABCD"[item.selectedOption]}.{" "}
+                {answerText(item.options[item.selectedOption])}
+              </span>
+              <Badge
+                variant={
+                  item.selectedOption === item.correctOption
+                    ? "secondary"
+                    : "destructive"
+                }
+                className={
+                  item.selectedOption === item.correctOption
+                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                    : undefined
+                }
+              >
+                {item.selectedOption === item.correctOption
+                  ? "Correct"
+                  : "Incorrect"}
+              </Badge>
             </p>
             {item.selectedOption !== item.correctOption ? (
               <p>
                 Correct answer: {"ABCD"[item.correctOption]}.{" "}
-                {item.options[item.correctOption]}
+                {answerText(item.options[item.correctOption])}
               </p>
             ) : null}
             <p className="mt-2 text-muted-foreground">{item.explanation}</p>
@@ -360,4 +375,8 @@ function AnswerReview({ review }: { review: QuizReview | undefined }) {
       </ol>
     </details>
   );
+}
+
+function answerText(option: string) {
+  return option.replace(/^\s*[A-D][.)]\s+/i, "");
 }

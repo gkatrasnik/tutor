@@ -44,7 +44,7 @@ export async function POST(
       input.data.requestId,
       input.data.message,
       {
-        mode: input.data.mode,
+        action: input.data.action,
         expectedSequence: input.data.expectedSequence,
         expectedStep: input.data.expectedStep,
       },

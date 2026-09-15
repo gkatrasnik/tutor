@@ -96,7 +96,7 @@ it("shows post-test explanations and the next lesson action", () => {
           review: [
             {
               question: "What helps?",
-              options: ["Focus", "Noise", "Interruptions", "Distraction"],
+              options: ["A. Focus", "B. Noise", "Interruptions", "Distraction"],
               selectedOption: 1,
               correctOption: 0,
               explanation: "Focus helps learning.",
@@ -111,6 +111,10 @@ it("shows post-test explanations and the next lesson action", () => {
   expect(html).toContain("Test again");
   expect(html).toContain("Review answers");
   expect(html).toContain("Correct answer: A. Focus");
+  expect(html).not.toContain("A. A. Focus");
+  expect(html).not.toContain("B. B. Noise");
+  expect(html).toContain("Incorrect");
+  expect(html).toContain("bg-destructive/10");
   expect(html).toContain("Focus helps learning.");
 });
 it("links back to the course after the last lesson", () => {

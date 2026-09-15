@@ -91,17 +91,30 @@ export default async function CoursesPage() {
                       variant={
                         course.status === "failed" ? "destructive" : "secondary"
                       }
+                      className={
+                        course.status === "ready" &&
+                        progressByCourse.get(course.courseId)!.total > 0 &&
+                        progressByCourse.get(course.courseId)!.completed ===
+                          progressByCourse.get(course.courseId)!.total
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                          : undefined
+                      }
                     >
-                      {course.status === "generating"
-                        ? "Generating"
-                        : course.status === "failed"
-                          ? "Needs attention"
-                          : course.outlineVersion >= 0 &&
-                              course.outlineVersion !== course.sourceVersion
-                            ? "Outline out of date"
-                            : course.status === "ready"
-                              ? `${course.lessonCount} lessons`
-                              : "Draft"}
+                      {course.status === "ready" &&
+                      progressByCourse.get(course.courseId)!.total > 0 &&
+                      progressByCourse.get(course.courseId)!.completed ===
+                        progressByCourse.get(course.courseId)!.total
+                        ? "Completed"
+                        : course.status === "generating"
+                          ? "Generating"
+                          : course.status === "failed"
+                            ? "Needs attention"
+                            : course.outlineVersion >= 0 &&
+                                course.outlineVersion !== course.sourceVersion
+                              ? "Outline out of date"
+                              : course.status === "ready"
+                                ? `${course.lessonCount} lessons`
+                                : "Draft"}
                     </Badge>
                   </div>
                   <CardTitle className="mt-4 break-words text-xl">

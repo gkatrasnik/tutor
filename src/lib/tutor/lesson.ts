@@ -13,7 +13,31 @@ export const lessonPlanSchema = z.object({
 });
 export type LessonPlan = z.infer<typeof lessonPlanSchema> & {
   sources?: import("./contracts").TutorSource[];
+  // Missing on older sessions, which already displayed the next part.
+  awaitingContinue?: boolean;
 };
+
+export function validateLessonPlan(value: unknown) {
+  const plan = lessonPlanSchema.parse(value);
+  const questions = new Set<string>();
+  for (const chunk of plan.chunks) {
+    const key = chunk.question
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .replace(/[?？؟]/gu, "")
+      .trim();
+    if (
+      /[?？؟]/u.test(chunk.explanation) ||
+      (chunk.question.match(/[?？؟]/gu)?.length ?? 0) > 1 ||
+      questions.has(key)
+    )
+      throw new Error(
+        "Lesson must teach first and ask one unique question per part",
+      );
+    questions.add(key);
+  }
+  return plan;
+}
 
 export function lessonProgress(
   plan: LessonPlan | null,
@@ -24,6 +48,7 @@ export function lessonProgress(
     total,
     completed: completedChunks,
     ready: total > 0 && completedChunks === total,
+    awaitingContinue: !!plan?.awaitingContinue && completedChunks < total,
   };
 }
 
