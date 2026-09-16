@@ -8,13 +8,14 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 function render(
   progress: Parameters<typeof TutorChat>[0]["initialLessonProgress"],
   initiallyReadOnly = false,
+  initialMessages: Parameters<typeof TutorChat>[0]["initialMessages"] = [],
 ) {
   return renderToStaticMarkup(
     createElement(TutorChat, {
       sessionId: "session",
       courseId: "course",
       nextLesson: null,
-      initialMessages: [],
+      initialMessages,
       initialSequence: 4,
       initialLessonProgress: progress,
       initiallyReadOnly,
@@ -26,6 +27,28 @@ function render(
 }
 
 describe("guided tutor controls", () => {
+  it("does not render an empty conversation before the lesson starts", () => {
+    const html = render({ total: 0, completed: 0, ready: false });
+    expect(html).not.toContain('aria-label="Conversation"');
+  });
+  it("keeps the transcript in page flow on mobile and bounds it on larger screens", () => {
+    const html = render({ total: 3, completed: 1, ready: false }, false, [
+      {
+        id: "message",
+        role: "assistant",
+        status: "complete",
+        content: "Welcome to the lesson.",
+        error: null,
+        sourceCount: 0,
+      },
+    ]);
+    expect(html).toContain('role="region"');
+    expect(html).toContain('aria-label="Conversation"');
+    expect(html).toContain("max-h-none");
+    expect(html).toContain("overflow-visible");
+    expect(html).toContain("md:max-h-[60vh]");
+    expect(html).toContain("md:overflow-y-auto");
+  });
   it("offers one input without answer/help controls while a question is active", () => {
     const html = render({ total: 3, completed: 0, ready: false });
     expect(html).toContain("Answer or ask for an explanation…");

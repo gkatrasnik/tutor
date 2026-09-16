@@ -60,10 +60,25 @@ export function TutorChat({
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const sending = useRef(false);
+  const conversation = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
+  const previousLastMessageId = useRef(initialMessages.at(-1)?.id);
   useEffect(() => {
-    if (busy) end.current?.scrollIntoView({ block: "nearest" });
-  }, [answer, busy]);
+    const lastMessageId = messages.at(-1)?.id;
+    const hasNewSavedMessage = lastMessageId !== previousLastMessageId.current;
+    previousLastMessageId.current = lastMessageId;
+    if (!busy && !hasNewSavedMessage) return;
+
+    const frame = requestAnimationFrame(() => {
+      if (window.matchMedia("(min-width: 768px)").matches) {
+        const container = conversation.current;
+        container?.scrollTo({ top: container.scrollHeight });
+      } else {
+        end.current?.scrollIntoView({ block: "end" });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [answer, busy, messages]);
 
   async function refresh(request = pending) {
     const response = await fetch(`/api/tutor/sessions/${sessionId}`, {
@@ -222,82 +237,90 @@ export function TutorChat({
           </CardContent>
         </Card>
       ) : null}
-      <div className="space-y-4" aria-label="Conversation">
-        {messages.map((message) => (
-          <Card
-            key={message.id}
-            className={
-              message.role === "user" ? "ml-6" : "mr-6 bg-tutor-bubble"
-            }
-          >
-            <CardContent className="p-5">
-              <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-                <span
-                  className={`size-2 rounded-full ${message.role === "user" ? "bg-primary" : "bg-play-blue"}`}
-                  aria-hidden="true"
-                />
-                {message.role === "user" ? "You" : "Tutor"}
-              </p>
-              <p className="whitespace-pre-wrap break-words leading-7">
-                {message.content}
-              </p>
-              {message.status === "failed" ? (
-                <p className="text-sm text-destructive">{message.error}</p>
-              ) : null}
-              {message.status === "pending" ? (
-                <p className="text-sm text-muted-foreground">
-                  {active
-                    ? "Response is processing. Refresh shortly."
-                    : "This response was interrupted. You can send your question again."}
-                </p>
-              ) : null}
-              {message.role === "assistant" &&
-              message.status === "complete" &&
-              message.sourceCount > 0 ? (
-                <SourceSheet
-                  sessionId={sessionId}
-                  messageId={message.id}
-                  count={message.sourceCount}
-                />
-              ) : null}
-            </CardContent>
-          </Card>
-        ))}
-        {busy ? (
-          <>
-            <Card className="ml-6">
+      {messages.length > 0 || busy ? (
+        <div
+          ref={conversation}
+          role="region"
+          aria-label="Conversation"
+          tabIndex={0}
+          className="max-h-none space-y-4 overflow-visible md:max-h-[60vh] md:overflow-y-auto md:rounded-xl md:border md:p-4 md:pr-3 focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          {messages.map((message) => (
+            <Card
+              key={message.id}
+              className={
+                message.role === "user" ? "ml-6" : "mr-6 bg-tutor-bubble"
+              }
+            >
               <CardContent className="p-5">
                 <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
                   <span
-                    className="size-2 rounded-full bg-primary"
+                    className={`size-2 rounded-full ${message.role === "user" ? "bg-primary" : "bg-play-blue"}`}
                     aria-hidden="true"
                   />
-                  You
-                </p>
-                <p className="whitespace-pre-wrap break-words">{question}</p>
-              </CardContent>
-            </Card>
-            <Card className="mr-6 bg-tutor-bubble">
-              <CardContent className="p-5">
-                <p
-                  className="mb-2 flex items-center gap-2 text-xs text-muted-foreground"
-                  role="status"
-                >
-                  <span
-                    className="size-2 rounded-full bg-play-blue"
-                    aria-hidden="true"
-                  />
-                  Tutor is responding…
+                  {message.role === "user" ? "You" : "Tutor"}
                 </p>
                 <p className="whitespace-pre-wrap break-words leading-7">
-                  {answer}
+                  {message.content}
                 </p>
+                {message.status === "failed" ? (
+                  <p className="text-sm text-destructive">{message.error}</p>
+                ) : null}
+                {message.status === "pending" ? (
+                  <p className="text-sm text-muted-foreground">
+                    {active
+                      ? "Response is processing. Refresh shortly."
+                      : "This response was interrupted. You can send your question again."}
+                  </p>
+                ) : null}
+                {message.role === "assistant" &&
+                message.status === "complete" &&
+                message.sourceCount > 0 ? (
+                  <SourceSheet
+                    sessionId={sessionId}
+                    messageId={message.id}
+                    count={message.sourceCount}
+                  />
+                ) : null}
               </CardContent>
             </Card>
-          </>
-        ) : null}
-        <div ref={end} />
-      </div>
+          ))}
+          {busy ? (
+            <>
+              <Card className="ml-6">
+                <CardContent className="p-5">
+                  <p className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+                    <span
+                      className="size-2 rounded-full bg-primary"
+                      aria-hidden="true"
+                    />
+                    You
+                  </p>
+                  <p className="whitespace-pre-wrap break-words">{question}</p>
+                </CardContent>
+              </Card>
+              <Card className="mr-6 bg-tutor-bubble">
+                <CardContent className="p-5">
+                  <p
+                    className="mb-2 flex items-center gap-2 text-xs text-muted-foreground"
+                    role="status"
+                  >
+                    <span
+                      className="size-2 rounded-full bg-play-blue"
+                      aria-hidden="true"
+                    />
+                    Tutor is responding…
+                  </p>
+                  <p className="whitespace-pre-wrap break-words leading-7">
+                    {answer}
+                  </p>
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
+          <div ref={end} />
+        </div>
+      ) : null}
       {error ? (
         <p
           role="alert"
