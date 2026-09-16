@@ -80,6 +80,30 @@ describe("course outline contract", () => {
 });
 
 describe("structured course generation", () => {
+  it("accepts a complete outline wrapped in a singleton array without another paid request", async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: response(JSON.stringify([outlineFixture])),
+    });
+    expect(await generateCourseOutline(sourceFixture, usage, model)).toEqual(
+      outlineFixture,
+    );
+    expect(model.doGenerateCalls).toHaveLength(1);
+  });
+
+  it.each([
+    { value: [] },
+    { value: [outlineFixture, outlineFixture] },
+    { value: [{ ...outlineFixture, lessons: [] }] },
+  ])("rejects invalid or ambiguous array wrappers", async ({ value }) => {
+    const model = new MockLanguageModelV4({
+      doGenerate: response(JSON.stringify(value)),
+    });
+    await expect(
+      generateCourseOutline(sourceFixture, usage, model),
+    ).rejects.toThrow();
+    expect(model.doGenerateCalls).toHaveLength(2);
+  });
+
   it("uses non-thinking structured output capped at 2500 tokens and preserves lesson order", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: response(JSON.stringify(outlineFixture)),

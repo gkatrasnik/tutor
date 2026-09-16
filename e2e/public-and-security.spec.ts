@@ -65,4 +65,7 @@ test("responses include the browser hardening policy", async ({ request }) => {
   expect(headers["content-security-policy"]).toContain(
     "frame-ancestors 'none'",
   );
+  expect(headers["content-security-policy"]).toContain(
+    "https://vercel.com/api/blob",
+  );
 });

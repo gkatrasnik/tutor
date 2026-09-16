@@ -258,7 +258,7 @@ describe("course-wide generation with Neon HTTP SQL executed in PostgreSQL", () 
       lessons: [{ ...outlineFixture.lessons[0], title: null }],
     });
     await expect(ensureCourseOutline(courseId, ownerId)).rejects.toThrow(
-      "Please retry the outline",
+      "Please retry generating the outline",
     );
     expect(await storedLessons()).toHaveLength(4);
     expect(await course()).toMatchObject({

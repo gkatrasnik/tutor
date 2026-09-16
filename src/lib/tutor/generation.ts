@@ -2,6 +2,10 @@ import "server-only";
 
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
+import {
+  OBJECT_OUTPUT_INSTRUCTION,
+  recoverWrappedObject,
+} from "@/lib/ai/structured-output";
 import { recordGateway } from "@/lib/usage/gateway";
 import type { AiContext } from "@/lib/usage/contracts";
 import { lessonPlanSchema, validateLessonPlan } from "./lesson";
@@ -33,21 +37,30 @@ async function generateObject<T>(
     model:
       typeof context.model === "string" ? context.model : context.model.modelId,
     run: async (recorder) => {
-      const result = await generateText({
-        model: context.model,
-        reasoning: "none",
-        maxOutputTokens,
-        maxRetries: 0,
-        abortSignal: context.signal,
-        onStepEnd: recorder.recordMetrics,
-        output: Output.object({ schema }),
-        system,
-        prompt,
-      });
-      recorder.recordMetrics(result);
-      if (result.finishReason !== "stop")
-        throw new Error("Incomplete tutor response");
-      return schema.parse(result.output);
+      try {
+        const result = await generateText({
+          model: context.model,
+          reasoning: "none",
+          maxOutputTokens,
+          maxRetries: 0,
+          abortSignal: context.signal,
+          onStepEnd: recorder.recordMetrics,
+          output: Output.object({ schema }),
+          system: `${system}\n${OBJECT_OUTPUT_INSTRUCTION}`,
+          prompt,
+        });
+        recorder.recordMetrics(result);
+        if (result.finishReason !== "stop")
+          throw new Error("Incomplete tutor response");
+        return schema.parse(result.output);
+      } catch (error) {
+        const recovered = recoverWrappedObject(error, schema);
+        if (recovered) {
+          recorder.recordMetrics(error);
+          return recovered.data;
+        }
+        throw error;
+      }
     },
   });
 }

@@ -5,7 +5,8 @@ const contentSecurityPolicy = (development: boolean) =>
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
+    // The Blob SDK uploads through Vercel's API after fetching a client token.
+    "connect-src 'self' https://vercel.com/api/blob https://vercel.com/api/blob/ https://*.blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",

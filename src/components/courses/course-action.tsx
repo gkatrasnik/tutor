@@ -13,11 +13,13 @@ export function CourseAction({
   status,
   outdated = false,
   disabled = false,
+  savedError = null,
 }: {
   courseId: string;
   status?: "pending" | "generating" | "ready" | "failed";
   outdated?: boolean;
   disabled?: boolean;
+  savedError?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -83,7 +85,7 @@ export function CourseAction({
           : status === "generating"
             ? "Check generation"
             : status === "failed"
-              ? "Retry outline"
+              ? "Retry"
               : outdated
                 ? "Update outline"
                 : "Generate outline"}
@@ -93,9 +95,9 @@ export function CourseAction({
           This can take up to two minutes. Keep this page open.
         </p>
       ) : null}
-      {error ? (
+      {!busy && (error || savedError) ? (
         <p className="text-sm text-destructive" role="alert">
-          {error}
+          {error || savedError}
         </p>
       ) : null}
     </div>

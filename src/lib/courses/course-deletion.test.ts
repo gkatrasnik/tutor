@@ -15,11 +15,12 @@ import { createTestDatabase } from "@/db/test-database";
 const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   del: vi.fn(),
+  list: vi.fn(),
   query: vi.fn(),
   transaction: vi.fn(),
 }));
 vi.mock("@/lib/auth/dal", () => ({ requireUser: mocks.user }));
-vi.mock("@vercel/blob", () => ({ del: mocks.del }));
+vi.mock("@vercel/blob", () => ({ del: mocks.del, list: mocks.list }));
 vi.mock("@/db", async () => {
   const { drizzle } = await import("drizzle-orm/neon-http");
   return {
@@ -56,6 +57,7 @@ beforeEach(async () => {
   vi.resetAllMocks();
   mocks.user.mockResolvedValue({ id: "learner-a" });
   mocks.del.mockResolvedValue(undefined);
+  mocks.list.mockResolvedValue({ blobs: [], hasMore: false });
   mocks.query.mockImplementation(
     (sql: string, params: unknown[], options: Query["options"]) => ({
       sql,
@@ -112,6 +114,45 @@ function request(id: string) {
 }
 
 describe("course deletion route", () => {
+  it("cleans up unregistered course uploads and unrecorded extraction files across pages", async () => {
+    const upload = `materials/learner-a/uploads/${courseId}/unregistered.pdf`;
+    const extracted =
+      "materials/learner-a/extracted/10000000-0000-4000-8000-000000000001.txt";
+    mocks.list
+      .mockResolvedValueOnce({
+        blobs: [{ pathname: upload }],
+        hasMore: true,
+        cursor: "page-2",
+      })
+      .mockResolvedValueOnce({
+        blobs: [{ pathname: `${upload}.txt` }],
+        hasMore: false,
+      })
+      .mockResolvedValueOnce({
+        blobs: [{ pathname: extracted }],
+        hasMore: false,
+      });
+    expect((await request(courseId)).status).toBe(200);
+    expect(mocks.list).toHaveBeenNthCalledWith(2, {
+      prefix: `materials/learner-a/uploads/${courseId}/`,
+      cursor: "page-2",
+      limit: 1000,
+    });
+    expect(mocks.del).toHaveBeenCalledWith(
+      expect.arrayContaining([upload, `${upload}.txt`, extracted]),
+    );
+  });
+
+  it.each(["list", "del"] as const)(
+    "retains course and material records if Blob %s fails",
+    async (operation) => {
+      mocks[operation].mockRejectedValue(new Error("Storage unavailable"));
+      expect((await request(courseId)).status).toBe(502);
+      expect((await pg.query("SELECT id FROM courses")).rows).toHaveLength(2);
+      expect((await pg.query("SELECT id FROM materials")).rows).toHaveLength(2);
+    },
+  );
+
   it("deletes only the authenticated owner's course and its private blobs", async () => {
     const response = await request(courseId);
 

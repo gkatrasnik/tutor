@@ -48,17 +48,13 @@ export function CourseOutlineStatus({
           list below for processing or errors.
         </p>
       ) : null}
-      {error ? (
-        <p role="alert" className="mt-2 text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
       <div className="mt-3">
         <CourseAction
           courseId={courseId}
           status={status}
           outdated={outdated}
           disabled={!canGenerate}
+          savedError={error}
         />
       </div>
     </section>

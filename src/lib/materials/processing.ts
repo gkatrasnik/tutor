@@ -114,6 +114,7 @@ export async function processMaterial(materialId: string, ownerId: string) {
           access: "private",
           contentType: "text/plain; charset=utf-8",
           allowOverwrite: true,
+          addRandomSuffix: false,
         },
       );
       extractedTextBlobUrl = extractedBlob.url;

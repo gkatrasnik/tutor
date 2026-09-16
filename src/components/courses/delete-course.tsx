@@ -1,8 +1,9 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Menu } from "@base-ui/react/menu";
+import { EllipsisVertical, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
@@ -14,7 +15,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 
@@ -28,6 +28,8 @@ export function DeleteCourse({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const menuTrigger = useRef<HTMLButtonElement>(null);
 
   async function remove() {
     setBusy(true);
@@ -53,13 +55,31 @@ export function DeleteCourse({
   }
 
   return (
-    <div className="space-y-2">
-      <AlertDialog>
-        <AlertDialogTrigger render={<Button variant="destructive" size="sm" />}>
-          <Trash2 aria-hidden="true" />
-          Delete course
-        </AlertDialogTrigger>
-        <AlertDialogContent>
+    <div>
+      <Menu.Root modal={false}>
+        <Menu.Trigger
+          render={<Button ref={menuTrigger} variant="ghost" size="icon" />}
+          aria-label="Course options"
+          disabled={busy}
+        >
+          <EllipsisVertical aria-hidden="true" />
+        </Menu.Trigger>
+        <Menu.Portal>
+          <Menu.Positioner align="end" sideOffset={6} className="z-50">
+            <Menu.Popup className="min-w-40 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none">
+              <Menu.Item
+                className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-destructive outline-none data-highlighted:bg-destructive/10"
+                onClick={() => setConfirmOpen(true)}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+                Delete course
+              </Menu.Item>
+            </Menu.Popup>
+          </Menu.Positioner>
+        </Menu.Portal>
+      </Menu.Root>
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent finalFocus={menuTrigger}>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {courseName}?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -83,7 +103,7 @@ export function DeleteCourse({
         </AlertDialogContent>
       </AlertDialog>
       {error ? (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="mt-2 text-sm text-destructive" role="alert">
           {error}
         </p>
       ) : null}

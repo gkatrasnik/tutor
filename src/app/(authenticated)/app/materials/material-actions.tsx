@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle, RefreshCw, Trash2 } from "lucide-react";
+import { Download, LoaderCircle, RefreshCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -69,6 +69,16 @@ export function MaterialActions({
 
   return (
     <div className="flex items-center gap-1">
+      <Button
+        variant="ghost"
+        size="icon"
+        nativeButton={false}
+        render={<a href={`/api/materials/${id}/download`} download />}
+        aria-label={`Download ${title}`}
+        title="Download material"
+      >
+        <Download aria-hidden="true" />
+      </Button>
       {canRetry ? (
         <Button variant="outline" size="sm" onClick={retry} disabled={busy}>
           {busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}{" "}

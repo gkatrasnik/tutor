@@ -81,7 +81,7 @@ export function CourseMaterialsPanel({
             >
               <div className="pt-4 pb-1">
                 <div className="rounded-xl border border-border bg-card p-5">
-                  <h3 className="mb-3 font-semibold">Add course material</h3>
+                  <h3 className="mb-3 font-semibold">Add course materials</h3>
                   <p className="mb-4 text-sm text-muted-foreground">
                     {hasOutline
                       ? "Adding or removing material requires an outline update before you can start or resume lessons. Previous conversations remain available."

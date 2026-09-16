@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { CourseLibrary } from "@/components/courses/course-library";
 import { DailyUsage } from "@/components/courses/daily-usage";
-import { Badge } from "@/components/ui/badge";
+import { CourseStatusBadge } from "@/components/courses/course-status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -87,35 +87,10 @@ export default async function CoursesPage() {
                     <span className="flex size-11 items-center justify-center rounded-[0.7rem] bg-play-blue text-white shadow-sm">
                       <BookOpenText className="size-5" aria-hidden="true" />
                     </span>
-                    <Badge
-                      variant={
-                        course.status === "failed" ? "destructive" : "secondary"
-                      }
-                      className={
-                        course.status === "ready" &&
-                        progressByCourse.get(course.courseId)!.total > 0 &&
-                        progressByCourse.get(course.courseId)!.completed ===
-                          progressByCourse.get(course.courseId)!.total
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                          : undefined
-                      }
-                    >
-                      {course.status === "ready" &&
-                      progressByCourse.get(course.courseId)!.total > 0 &&
-                      progressByCourse.get(course.courseId)!.completed ===
-                        progressByCourse.get(course.courseId)!.total
-                        ? "Completed"
-                        : course.status === "generating"
-                          ? "Generating"
-                          : course.status === "failed"
-                            ? "Needs attention"
-                            : course.outlineVersion >= 0 &&
-                                course.outlineVersion !== course.sourceVersion
-                              ? "Outline out of date"
-                              : course.status === "ready"
-                                ? `${course.lessonCount} lessons`
-                                : "Draft"}
-                    </Badge>
+                    <CourseStatusBadge
+                      course={course}
+                      progress={progressByCourse.get(course.courseId)!}
+                    />
                   </div>
                   <CardTitle className="mt-4 break-words text-xl">
                     {course.name}

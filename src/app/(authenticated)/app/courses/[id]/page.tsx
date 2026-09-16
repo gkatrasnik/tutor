@@ -6,6 +6,7 @@ import { z } from "zod";
 import { CourseLearningPath } from "@/components/courses/course-learning-path";
 import { CourseMaterialsPanel } from "@/components/courses/course-materials-panel";
 import { CourseOutlineStatus } from "@/components/courses/course-outline-status";
+import { CourseStatusBadge } from "@/components/courses/course-status-badge";
 import { DeleteCourse } from "@/components/courses/delete-course";
 import { MaterialList } from "@/components/courses/material-list";
 import { getLearnerQuotas } from "@/lib/analytics/service";
@@ -40,6 +41,7 @@ export default async function CoursePage({
       title: courses.title,
       summary: courses.summary,
       status: courses.status,
+      lessonCount: courses.lessonCount,
       error: courses.generationError,
       sourceVersion: courses.sourceVersion,
       outlineVersion: courses.outlineVersion,
@@ -136,7 +138,16 @@ export default async function CoursePage({
         <h1 className="break-words text-3xl font-semibold tracking-tight">
           {course.name}
         </h1>
-        <DeleteCourse courseId={course.id} courseName={course.name} />
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <CourseStatusBadge
+            course={course}
+            progress={{
+              total: lessonProgress.length,
+              completed: completedIds.size,
+            }}
+          />
+          <DeleteCourse courseId={course.id} courseName={course.name} />
+        </div>
       </div>
       {hasOutline ? (
         course.summary ? (
@@ -149,7 +160,7 @@ export default async function CoursePage({
         ) : null
       ) : (
         <p className="mt-3 text-sm text-muted-foreground">
-          Add your material, then generate a course to start learning.
+          Add your material and generate a course to start learning.
         </p>
       )}
       {hasOutline ? outlineStatus : null}

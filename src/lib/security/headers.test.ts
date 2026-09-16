@@ -3,6 +3,23 @@ import { describe, expect, it } from "vitest";
 import { securityHeaders } from "./headers";
 
 describe("securityHeaders", () => {
+  it.each([true, false])(
+    "allows the Blob upload API in development=%s",
+    (development) => {
+      const csp = securityHeaders(development).find(
+        (header) => header.key === "Content-Security-Policy",
+      )!.value;
+      const connect = csp
+        .split("; ")
+        .find((directive) => directive.startsWith("connect-src "))!
+        .split(" ");
+      expect(connect).toContain("https://vercel.com/api/blob");
+      expect(connect).toContain("https://vercel.com/api/blob/");
+      expect(connect).not.toContain("https:");
+      expect(connect).not.toContain("*");
+    },
+  );
+
   it("sets browser hardening headers and a restrictive production CSP", () => {
     const headers = new Map(
       securityHeaders(false).map((header) => [header.key, header.value]),

@@ -1,10 +1,11 @@
-import { del } from "@vercel/blob";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
 import { courses, materials } from "@/db/schema";
 import { requireUser } from "@/lib/auth/dal";
+import { deleteCourseBlobs } from "@/lib/materials/blob-cleanup";
+import { logServerError } from "@/lib/observability/logger";
 
 const idSchema = z.uuid();
 
@@ -31,6 +32,7 @@ export async function DELETE(
 
   const storedMaterials = await db
     .select({
+      id: materials.id,
       blobPathname: materials.blobPathname,
       extractedTextBlobPathname: materials.extractedTextBlobPathname,
     })
@@ -38,16 +40,19 @@ export async function DELETE(
     .where(
       and(eq(materials.courseId, course.id), eq(materials.ownerId, user.id)),
     );
-  const paths = [
-    ...new Set(
-      storedMaterials.flatMap((material) =>
-        [material.blobPathname, material.extractedTextBlobPathname].filter(
-          (value): value is string => Boolean(value),
-        ),
-      ),
-    ),
-  ];
-  if (paths.length) await del(paths);
+  try {
+    await deleteCourseBlobs(user.id, course.id, storedMaterials);
+  } catch (error) {
+    logServerError("course.blob_cleanup.failed", error, {
+      courseId: course.id,
+    });
+    return Response.json(
+      {
+        error: "The course files could not be fully deleted. Please try again.",
+      },
+      { status: 502 },
+    );
+  }
 
   const deleted = await db.batch([
     db

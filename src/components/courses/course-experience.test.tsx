@@ -143,7 +143,8 @@ describe("learning-first course presentation", () => {
     expect(generating).toContain("Generating your outline");
     expect(generating).toContain("Check generation");
     expect(failed).toContain("Outline generation needs attention");
-    expect(failed).toContain("Retry outline");
+    expect(failed).toContain("Retry");
+    expect(failed.match(/Please retry\./g)).toHaveLength(1);
     expect(failed).toContain('role="alert"');
   });
 

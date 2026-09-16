@@ -105,7 +105,7 @@ export async function POST(request: Request) {
 
     try {
       const blob = await put(
-        `materials/${encodeURIComponent(user.id)}/uploads/${crypto.randomUUID()}.txt`,
+        `${materialUploadPrefix(user.id)}${course.id}/${crypto.randomUUID()}.txt`,
         parsed.data.text,
         { access: "private", contentType: "text/plain; charset=utf-8" },
       );

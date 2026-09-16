@@ -9,6 +9,7 @@ import {
 import { z } from "zod";
 
 import { env } from "@/lib/env";
+import { recoverWrappedObject } from "@/lib/ai/structured-output";
 import { recordGateway } from "@/lib/usage/gateway";
 import type { AiContext } from "@/lib/usage/contracts";
 
@@ -33,22 +34,31 @@ export async function generateCourseOutline(
         feature: "outline",
         model: typeof model === "string" ? model : model.modelId,
         run: async (recorder) => {
-          const result = await generateText({
-            model,
-            reasoning: "none",
-            maxOutputTokens: COURSE_OUTPUT_TOKENS,
-            maxRetries: 0,
-            onStepEnd: recorder.recordMetrics,
-            abortSignal: AbortSignal.timeout(COURSE_ATTEMPT_TIMEOUT_MS),
-            output: Output.object({
-              schema: courseOutlineSchema,
-              name: "course_outline",
-            }),
-            system: COURSE_SYSTEM_PROMPT,
-            prompt: buildCoursePrompt(source, attempt > 0),
-          });
-          recorder.recordMetrics(result);
-          return courseOutlineSchema.parse(result.output);
+          try {
+            const result = await generateText({
+              model,
+              reasoning: "none",
+              maxOutputTokens: COURSE_OUTPUT_TOKENS,
+              maxRetries: 0,
+              onStepEnd: recorder.recordMetrics,
+              abortSignal: AbortSignal.timeout(COURSE_ATTEMPT_TIMEOUT_MS),
+              output: Output.object({
+                schema: courseOutlineSchema,
+                name: "course_outline",
+              }),
+              system: COURSE_SYSTEM_PROMPT,
+              prompt: buildCoursePrompt(source, attempt > 0),
+            });
+            recorder.recordMetrics(result);
+            return courseOutlineSchema.parse(result.output);
+          } catch (error) {
+            const recovered = recoverWrappedObject(error, courseOutlineSchema);
+            if (recovered) {
+              recorder.recordMetrics(error);
+              return recovered.data;
+            }
+            throw error;
+          }
         },
       });
     } catch (error) {

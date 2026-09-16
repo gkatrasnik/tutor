@@ -1,4 +1,5 @@
 import "server-only";
+import { NoObjectGeneratedError } from "ai";
 
 import { and, asc, eq, exists, or, sql } from "drizzle-orm";
 
@@ -253,7 +254,9 @@ export async function ensureCourseOutline(
     const message =
       error instanceof CourseGenerationError
         ? error.message
-        : "Your materials are indexed, but the course outline could not be generated or saved. Please retry the outline.";
+        : NoObjectGeneratedError.isInstance(error)
+          ? "The AI returned an incomplete or invalid outline. Your materials are still indexed. Please retry generating the outline."
+          : "Your materials are indexed, but the course outline could not be generated or saved. Please retry generating the outline.";
     await db
       .update(courses)
       .set({
