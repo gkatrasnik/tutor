@@ -56,3 +56,11 @@ export function formatLessonChunk(plan: LessonPlan, index: number) {
   const chunk = plan.chunks[index];
   return `Part ${index + 1} of ${plan.chunks.length}\n\n${chunk.explanation}\n\n${chunk.question}`;
 }
+
+export function formatQuestionReminder(plan: LessonPlan, index: number) {
+  return `Question\n\n${plan.chunks[index].question}`;
+}
+
+export function formatTestReady() {
+  return "You have finished all lesson parts. You can start the test now.";
+}

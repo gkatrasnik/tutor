@@ -1,4 +1,5 @@
 import { MockLanguageModelV4 } from "ai/test";
+import { streamingModel } from "./streaming-model.test-support";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -6,8 +7,11 @@ vi.mock("@/lib/usage/gateway", () => ({
   recordGateway: async ({
     run,
   }: {
-    run: (recorder: { recordMetrics: () => void }) => Promise<unknown>;
-  }) => run({ recordMetrics() {} }),
+    run: (recorder: {
+      recordMetrics: () => void;
+      markFirstToken: () => void;
+    }) => Promise<unknown>;
+  }) => run({ recordMetrics() {}, markFirstToken() {} }),
 }));
 
 import { generateLessonPlan, generateTutorReply } from "./generation";
@@ -56,9 +60,10 @@ describe("tutor model compatibility", () => {
   it("unwraps tutor feedback", async () => {
     const reply = {
       intent: "answer",
+      correctness: "correct",
       feedback: "Correct, a numerator counts selected parts [1].",
     };
-    const model = new MockLanguageModelV4({ doGenerate: response([reply]) });
+    const model = streamingModel({ doGenerate: response([reply]) });
     expect(
       await generateTutorReply(context(model), "Synthetic answer"),
     ).toEqual(reply);

@@ -2,7 +2,11 @@ import "server-only";
 
 import type { LanguageModel } from "ai";
 
-import { formatLessonChunk } from "./lesson";
+import {
+  formatLessonChunk,
+  formatQuestionReminder,
+  formatTestReady,
+} from "./lesson";
 import { generateLessonPlan, generateTutorReply } from "./generation";
 import { env } from "@/lib/env";
 import { logServerError } from "@/lib/observability/logger";
@@ -46,6 +50,9 @@ export function streamTutorTurn(
       let plan = turn.session.lessonPlan;
       const completed = turn.session.completedChunks;
       let content = "";
+      let streamed = false;
+      let visibleFeedback = "";
+      let followUp = "";
       let sources = plan?.sources ?? [];
       if (turn.action === "continue") {
         if (!plan?.awaitingContinue || completed >= plan.chunks.length)
@@ -54,7 +61,10 @@ export function streamTutorTurn(
           );
         content = formatLessonChunk(plan, completed);
         turn.lessonUpdate = {
-          lessonPlan: { ...plan, awaitingContinue: false },
+          lessonPlan: {
+            ...plan,
+            awaitingContinue: false,
+          },
           completedChunks: completed,
         };
       } else {
@@ -99,6 +109,16 @@ export function streamTutorTurn(
                 lessonFinished: ready,
                 message: turn.message,
               }),
+            (text) => {
+              streamed = true;
+              if (text.startsWith(visibleFeedback)) {
+                const delta = text.slice(visibleFeedback.length);
+                if (delta) emit({ type: "delta", text: delta });
+              } else {
+                emit({ type: "replace", text });
+              }
+              visibleFeedback = text;
+            },
           );
           content = reply.feedback;
           if (!alreadyAnswered && reply.intent === "answer") {
@@ -107,21 +127,29 @@ export function streamTutorTurn(
               lessonPlan: {
                 ...plan,
                 sources,
-                awaitingContinue: next < plan.chunks.length,
+                awaitingContinue: false,
               },
               completedChunks: next,
             };
+            if (next < plan.chunks.length) {
+              followUp = `\n\n${formatLessonChunk(plan, next)}`;
+            } else {
+              followUp = `\n\n${formatTestReady()}`;
+            }
+          } else if (!alreadyAnswered) {
+            followUp = `\n\n${formatQuestionReminder(plan, currentIndex)}`;
           }
+          content += followUp;
         }
       }
-      // Buffer and validate model output, then persist before showing it. A
-      // failed generation/save cannot leak an extra question or advance the UI.
+      // Streamed feedback is provisional; only a saved reply advances the lesson.
       await completeTutorTurn(
         turn,
         content,
         sources.map((source) => source.id),
       );
-      emit({ type: "delta", text: content });
+      if (!streamed) emit({ type: "delta", text: content });
+      else if (followUp) emit({ type: "delta", text: followUp });
       emit({ type: "done", messageId: turn.messageId });
     } catch (error) {
       if (!(error instanceof TutorError))
@@ -138,6 +166,7 @@ export function streamTutorTurn(
       } catch {
         /* The bounded lease allows recovery after a database outage. */
       }
+      emit({ type: "replace", text: "" });
       emit({ type: "error", error: message });
     } finally {
       if (turn.reservationId) {
@@ -157,7 +186,8 @@ export function streamTutorTurn(
     response: new Response(body, {
       headers: {
         "Content-Type": "application/x-ndjson; charset=utf-8",
-        "Cache-Control": "no-store",
+        "Cache-Control": "no-store, no-transform",
+        "X-Accel-Buffering": "no",
         "X-Content-Type-Options": "nosniff",
       },
     }),

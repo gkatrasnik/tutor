@@ -1,6 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import type { NeonQueryFunction } from "@neondatabase/serverless";
 import { MockLanguageModelV4 } from "ai/test";
+import { streamingModel } from "./streaming-model.test-support";
 import {
   afterAll,
   beforeAll,
@@ -186,16 +187,107 @@ function modelFor(
   feedback = "Attention helps us focus [1].",
   failure = false,
   intent: "answer" | "help" | "mixed" | "uncertain" = "answer",
+  correctness: "correct" | "incorrect" | "not_applicable" = intent === "answer"
+    ? "correct"
+    : "not_applicable",
 ) {
-  return new MockLanguageModelV4({
+  return streamingModel({
     doGenerate: async () => {
       if (failure) throw new Error("private provider details");
-      return generated({ intent, feedback });
+      return generated({ intent, correctness, feedback });
     },
   });
 }
 
 describe("persistent tutoring", () => {
+  it.each(["success", "failure"])(
+    "delivers partial feedback before provider completion and handles %s",
+    async (outcome) => {
+      type Part =
+        Awaited<
+          ReturnType<MockLanguageModelV4["doStream"]>
+        >["stream"] extends ReadableStream<infer T>
+          ? T
+          : never;
+      let provider!: ReadableStreamDefaultController<Part>;
+      const model = new MockLanguageModelV4({
+        doStream: async () => ({
+          stream: new ReadableStream<Part>({
+            start(controller) {
+              provider = controller;
+              controller.enqueue({ type: "stream-start", warnings: [] });
+              controller.enqueue({ type: "text-start", id: "reply" });
+              controller.enqueue({
+                type: "text-delta",
+                id: "reply",
+                delta:
+                  '{"intent":"answer","correctness":"correct","feedback":"Attention helps',
+              });
+            },
+          }),
+        }),
+      });
+      const turn = await prepare();
+      const stream = streamTutorTurn(turn, model);
+      const reader = stream.response.body!.getReader();
+      const first = await reader.read();
+      expect(new TextDecoder().decode(first.value)).toContain(
+        '"text":"Attention helps"',
+      );
+      expect((await getTutorMessages(sessionId, ownerId)).at(-1)?.status).toBe(
+        "pending",
+      );
+      expect((await getTutorSession(sessionId, ownerId)).completedChunks).toBe(
+        0,
+      );
+      if (outcome === "failure") {
+        provider.error(new Error("private provider failure"));
+      } else {
+        provider.enqueue({
+          type: "text-delta",
+          id: "reply",
+          delta: ' us focus [1]."}',
+        });
+        provider.enqueue({ type: "text-end", id: "reply" });
+        const { usage, finishReason, providerMetadata } = generated({});
+        provider.enqueue({
+          type: "finish",
+          usage,
+          finishReason,
+          providerMetadata,
+        });
+        provider.close();
+      }
+      let rest = "";
+      while (true) {
+        const part = await reader.read();
+        if (part.done) break;
+        rest += new TextDecoder().decode(part.value);
+      }
+      await stream.completion;
+      const saved = (await getTutorMessages(sessionId, ownerId)).at(-1);
+      if (outcome === "success") {
+        expect(rest).toContain('"type":"done"');
+        expect(saved).toMatchObject({
+          status: "complete",
+          content: expect.stringContaining("Attention helps us focus [1]."),
+        });
+        expect(
+          (await getTutorSession(sessionId, ownerId)).completedChunks,
+        ).toBe(1);
+      } else {
+        expect(rest).toContain('"type":"replace","text":""');
+        expect(rest).toContain('"type":"error"');
+        expect(rest).not.toContain('"type":"done"');
+        expect(rest).not.toContain("private provider failure");
+        expect(saved).toMatchObject({ status: "failed", content: "" });
+        expect(
+          (await getTutorSession(sessionId, ownerId)).completedChunks,
+        ).toBe(0);
+      }
+    },
+  );
+
   it("reuses the selected lesson session and rejects another owner", async () => {
     expect(await startTutorSession(lessonId, ownerId)).toEqual({
       id: sessionId,
@@ -221,7 +313,7 @@ describe("persistent tutoring", () => {
       events.push(event.type),
     );
     await stream.completion;
-    expect(events).toEqual(["delta", "done"]);
+    expect(events).toEqual(["delta", "delta", "done"]);
     expect(model.doGenerateCalls[0]).toMatchObject({
       reasoning: "none",
       maxOutputTokens: 800,
@@ -256,7 +348,7 @@ describe("persistent tutoring", () => {
       cost_usd: "0.000030000000000000",
       gateway_generation_id: "reply-123",
     });
-    expect(usage.time_to_first_token_ms).toBeNull();
+    expect(usage.time_to_first_token_ms).toBeGreaterThanOrEqual(0);
   });
 
   it("does not create duplicate turns or charge again when a completed request is replayed", async () => {
@@ -511,6 +603,57 @@ describe("tutor input and prompt boundaries", () => {
 });
 
 describe("guided lesson progress", () => {
+  it.each(["correct", "incorrect", "not_applicable"] as const)(
+    "advances after an answer regardless of the model verdict: %s",
+    async (correctness) => {
+      const turn = await prepare(crypto.randomUUID(), "My answer");
+      const stream = streamTutorTurn(
+        turn,
+        modelFor("Here is brief feedback.", false, "answer", correctness),
+      );
+      const wire = await stream.response.text();
+      await stream.completion;
+      expect(wire).toContain("Part 2 of 3");
+      expect((await getTutorSession(sessionId, ownerId)).completedChunks).toBe(
+        1,
+      );
+      expect(
+        await prepareTutorTurn(
+          sessionId,
+          ownerId,
+          turn.requestId,
+          turn.message,
+        ),
+      ).toEqual({ replay: turn.messageId });
+      expect((await getTutorSession(sessionId, ownerId)).completedChunks).toBe(
+        1,
+      );
+    },
+  );
+
+  it("ignores legacy attempt counts and announces the test after an incorrect final answer", async () => {
+    await pg.exec(
+      "UPDATE tutor_sessions SET completed_chunks = 2, lesson_plan = jsonb_set(lesson_plan, '{incorrectAttempts}', '1')",
+    );
+    const stream = streamTutorTurn(
+      await prepare(),
+      modelFor(
+        "The correct answer is to focus on one task.",
+        false,
+        "answer",
+        "incorrect",
+      ),
+    );
+    const wire = await stream.response.text();
+    await stream.completion;
+    expect(wire).not.toContain("Part 4");
+    expect(wire).toContain("You have finished all lesson parts");
+    expect(
+      (await getTutorMessages(sessionId, ownerId)).at(-1)?.content,
+    ).toContain("You can start the test now.");
+    expect((await getTutorSession(sessionId, ownerId)).completedChunks).toBe(3);
+  });
+
   it("creates a saved plan, asks each question, and unlocks only after the final answer", async () => {
     await pg.exec("UPDATE tutor_sessions SET lesson_plan = null");
     const plan = {
@@ -547,35 +690,12 @@ describe("guided lesson progress", () => {
       const content = (await getTutorMessages(sessionId, ownerId)).at(
         -1,
       )?.content;
-      expect(content).toBe("Here is a helpful correction.");
-      expect(session.lessonPlan?.awaitingContinue).toBe(index < 2);
+      expect(content).toContain("Here is a helpful correction.");
+      expect(session.lessonPlan?.awaitingContinue).toBe(false);
       if (index < 2) {
-        const next = await prepareTutorTurn(
-          sessionId,
-          ownerId,
-          crypto.randomUUID(),
-          "Continue",
-          {
-            action: "continue",
-            expectedSequence: session.nextSequence,
-            expectedStep: index + 1,
-          },
-        );
-        if ("replay" in next) throw new Error("Unexpected replay");
-        const nextModel = modelFor();
-        const nextStream = streamTutorTurn(next, nextModel);
-        await readTutorStream(nextStream.response.body!, () => {});
-        await nextStream.completion;
-        expect(
-          (await getTutorMessages(sessionId, ownerId)).at(-1)?.content,
-        ).toBe(
+        expect(content).toContain(
           `Part ${index + 2} of 3\n\nExplanation ${index + 1}\n\nQuestion ${index + 1}?`,
         );
-        expect(nextModel.doGenerateCalls).toHaveLength(0);
-        expect(
-          (await getTutorSession(sessionId, ownerId)).lessonPlan
-            ?.awaitingContinue,
-        ).toBe(false);
       }
       expect(
         await prepareTutorTurn(
@@ -606,7 +726,7 @@ describe("help, recovery, and next lesson", () => {
     ["mixed", "Focus on one task, but can you explain why?"],
     ["uncertain", "Maybe later"],
   ] as const)(
-    "keeps %s on the current part without a new question",
+    "keeps %s on the current part and repeats the exact question",
     async (intent, message) => {
       const model = modelFor("Here is a short explanation.", false, intent);
       const stream = streamTutorTurn(
@@ -615,7 +735,10 @@ describe("help, recovery, and next lesson", () => {
       );
       const wire = await stream.response.text();
       await stream.completion;
-      expect(wire).not.toContain("What helps");
+      expect(wire).toContain("Question\\n\\nWhat helps you focus?");
+      expect((await getTutorMessages(sessionId, ownerId)).at(-1)?.content).toBe(
+        "Here is a short explanation.\n\nQuestion\n\nWhat helps you focus?",
+      );
       const session = await getTutorSession(sessionId, ownerId);
       expect(session.completedChunks).toBe(0);
       expect(session.lessonPlan?.awaitingContinue).not.toBe(true);
@@ -626,7 +749,7 @@ describe("help, recovery, and next lesson", () => {
     },
   );
 
-  it("accepts a tentative answer, then reviews the answered part until Continue", async () => {
+  it("accepts a tentative correct answer and makes the next displayed part active", async () => {
     const first = streamTutorTurn(
       await prepare(crypto.randomUUID(), "Focus on one task?"),
       modelFor("Correct."),
@@ -646,7 +769,7 @@ describe("help, recovery, and next lesson", () => {
     await help.completion;
     let session = await getTutorSession(sessionId, ownerId);
     expect(session.completedChunks).toBe(1);
-    expect(session.lessonPlan?.awaitingContinue).toBe(true);
+    expect(session.lessonPlan?.awaitingContinue).toBe(false);
     const last = model.doGenerateCalls[0].prompt.at(-1);
     if (last?.role !== "user" || last.content[0].type !== "text")
       throw new Error("Missing learner context");
@@ -656,10 +779,10 @@ describe("help, recovery, and next lesson", () => {
       )[1],
     );
     expect(data).toMatchObject({
-      alreadyAnswered: true,
-      currentPart: session.lessonPlan!.chunks[0],
+      alreadyAnswered: false,
+      currentPart: session.lessonPlan!.chunks[1],
     });
-    // Even another answer-shaped message cannot complete a part never shown.
+    // The next part was shown automatically and can now be answered.
     const extra = streamTutorTurn(
       await prepare(),
       modelFor("That is correct."),
@@ -667,7 +790,7 @@ describe("help, recovery, and next lesson", () => {
     await extra.response.text();
     await extra.completion;
     session = await getTutorSession(sessionId, ownerId);
-    expect(session.completedChunks).toBe(1);
+    expect(session.completedChunks).toBe(2);
   });
 
   it("rejects premature Continue and makes a valid Continue free and replayable", async () => {
@@ -679,9 +802,24 @@ describe("help, recovery, and next lesson", () => {
       }),
     ).rejects.toMatchObject({ status: 409 });
     expect(await getTutorMessages(sessionId, ownerId)).toHaveLength(0);
-    const reply = streamTutorTurn(await prepare(), modelFor("Correct."));
-    await reply.response.text();
-    await reply.completion;
+    // Simulate a session persisted before automatic advancement was introduced.
+    await pg.exec(
+      "UPDATE tutor_sessions SET completed_chunks = 1, lesson_plan = jsonb_set(lesson_plan, '{awaitingContinue}', 'true')",
+    );
+    await pg.query(
+      "UPDATE tutor_sessions SET lesson_plan = jsonb_set(lesson_plan, '{sources}', $1::jsonb)",
+      [
+        JSON.stringify([
+          {
+            id: chunkId,
+            filename: "Study notes",
+            ordinal: 0,
+            pageNumber: null,
+            content: "Attention supports learning.",
+          },
+        ]),
+      ],
+    );
     const session = await getTutorSession(sessionId, ownerId);
     const options = {
       action: "continue" as const,
@@ -690,7 +828,9 @@ describe("help, recovery, and next lesson", () => {
     };
     const requestId = crypto.randomUUID();
     // Continue still works once the learner has used the daily AI allowance.
-    await pg.exec("UPDATE tutor_daily_usage SET turns = 30");
+    await pg.exec(
+      "INSERT INTO tutor_daily_usage(owner_id, day, turns) VALUES ('learner-a', to_char(now() at time zone 'UTC', 'YYYY-MM-DD'), 30)",
+    );
     const next = await prepareTutorTurn(
       sessionId,
       ownerId,
@@ -734,10 +874,11 @@ describe("help, recovery, and next lesson", () => {
 
   it("retries feedback containing a question before publishing anything", async () => {
     let call = 0;
-    const model = new MockLanguageModelV4({
+    const model = streamingModel({
       doGenerate: async () =>
         generated({
           intent: "answer",
+          correctness: "correct",
           feedback: call++ === 0 ? "Correct. What comes next?" : "Correct.",
         }),
     });
@@ -746,9 +887,9 @@ describe("help, recovery, and next lesson", () => {
     await stream.completion;
     expect(wire).not.toContain("What comes next");
     expect(model.doGenerateCalls).toHaveLength(2);
-    expect((await getTutorMessages(sessionId, ownerId)).at(-1)?.content).toBe(
-      "Correct.",
-    );
+    expect(
+      (await getTutorMessages(sessionId, ownerId)).at(-1)?.content,
+    ).toContain("Correct.");
     expect((await getTutorSession(sessionId, ownerId)).completedChunks).toBe(1);
     expect(await turns()).toBe(1);
   });

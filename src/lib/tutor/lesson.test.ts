@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { lessonProgress, validateLessonPlan } from "./lesson";
+import {
+  formatQuestionReminder,
+  formatTestReady,
+  lessonProgress,
+  validateLessonPlan,
+} from "./lesson";
 
 const plan = {
   chunks: [
@@ -45,5 +50,13 @@ describe("lesson structure", () => {
     expect(
       lessonProgress({ ...plan, awaitingContinue: true }, 3),
     ).toMatchObject({ awaitingContinue: false, ready: true });
+  });
+  it("repeats the saved question exactly and announces the test", () => {
+    expect(formatQuestionReminder(plan, 1)).toBe(
+      "Question\n\nWhich shortcut closes a desktop?",
+    );
+    expect(formatTestReady()).toBe(
+      "You have finished all lesson parts. You can start the test now.",
+    );
   });
 });

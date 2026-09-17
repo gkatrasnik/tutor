@@ -57,23 +57,23 @@ describe("guided tutor controls", () => {
     expect(html).not.toContain("Ask for help</button>");
     expect(html).not.toContain(">Continue</button>");
   });
-  it("restores Continue after feedback and keeps help available", () => {
+  it("keeps help available without a Continue button for legacy sessions", () => {
     const html = render({
       total: 3,
       completed: 1,
       ready: false,
       awaitingContinue: true,
     });
-    expect(html).toContain(">Continue</button>");
+    expect(html).not.toContain(">Continue</button>");
     expect(html).toContain("Ask about anything you want to understand better…");
-    expect(html).toContain("1 of 3 lesson questions answered");
+    expect(html).toContain("1 of 3 lesson parts completed");
   });
-  it("disables Continue in an archived conversation", () => {
+  it("does not offer Continue in an archived conversation", () => {
     const html = render(
       { total: 3, completed: 1, ready: false, awaitingContinue: true },
       true,
     );
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>Continue<\/button>/);
+    expect(html).not.toContain(">Continue</button>");
   });
   it("offers review and the test after the final answer, without Continue", () => {
     const html = render({

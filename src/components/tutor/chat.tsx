@@ -1,7 +1,13 @@
 "use client";
 
 import { MessageCircleQuestion } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -60,6 +66,7 @@ export function TutorChat({
   const [answer, setAnswer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const sending = useRef(false);
+  const resumedLegacyStep = useRef<string | null>(null);
   const conversation = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const previousLastMessageId = useRef(initialMessages.at(-1)?.id);
@@ -162,6 +169,7 @@ export function TutorChat({
       await readTutorStream(response.body, (event) => {
         if (event.type === "delta")
           setAnswer((current) => current + event.text);
+        if (event.type === "replace") setAnswer(event.text);
       });
     } catch (caught) {
       setError(
@@ -188,6 +196,35 @@ export function TutorChat({
     event.preventDefault();
     void send(draft);
   }
+
+  // Resume sessions saved by the old manual-Continue workflow once per step.
+  const resumeLegacyStep = useEffectEvent(
+    () => void send("Continue", "continue"),
+  );
+  useEffect(() => {
+    const key = `${sessionId}:${sequence}`;
+    if (
+      progress.awaitingContinue &&
+      !busy &&
+      !active &&
+      !assessing &&
+      !readOnly &&
+      !pending &&
+      resumedLegacyStep.current !== key
+    ) {
+      resumedLegacyStep.current = key;
+      resumeLegacyStep();
+    }
+  }, [
+    sessionId,
+    sequence,
+    progress.awaitingContinue,
+    busy,
+    active,
+    assessing,
+    readOnly,
+    pending,
+  ]);
 
   return (
     <div className="mt-6 space-y-5">
@@ -337,7 +374,7 @@ export function TutorChat({
       ) : null}
       {progress.total > 0 ? (
         <p role="status" className="text-sm text-muted-foreground">
-          {progress.completed} of {progress.total} lesson questions answered
+          {progress.completed} of {progress.total} lesson parts completed
           {progress.ready ? " · Ready for the test" : ""}
         </p>
       ) : null}
@@ -375,23 +412,6 @@ export function TutorChat({
       ) : null}
       {progress.total > 0 ? (
         <form onSubmit={submit} className="space-y-3">
-          {progress.awaitingContinue ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
-              <p className="text-sm text-muted-foreground">
-                Continue when you’re ready for the next part, or ask for more
-                explanation below.
-              </p>
-              <Button
-                type="button"
-                disabled={busy || assessing || active || readOnly || !!pending}
-                onClick={() => {
-                  void send("Continue", "continue");
-                }}
-              >
-                Continue
-              </Button>
-            </div>
-          ) : null}
           <Label htmlFor="tutor-message">
             {progress.ready ? "Review the lesson" : "Your message"}
           </Label>

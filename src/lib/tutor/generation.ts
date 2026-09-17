@@ -1,6 +1,6 @@
 import "server-only";
 
-import { generateText, Output, type LanguageModel } from "ai";
+import { generateText, streamText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import {
   OBJECT_OUTPUT_INSTRUCTION,
@@ -15,6 +15,7 @@ const hasQuestion = (text: string) => /[?？؟]/u.test(text);
 
 export const tutorReplySchema = z.object({
   intent: z.enum(["answer", "help", "mixed", "uncertain"]),
+  correctness: z.enum(["correct", "incorrect", "not_applicable"]),
   feedback: z.string().trim().min(1).max(2000),
 });
 
@@ -65,6 +66,54 @@ async function generateObject<T>(
   });
 }
 
+async function streamReplyObject(
+  context: GenerationContext,
+  system: string,
+  prompt: string,
+  onFeedback: (text: string) => void,
+) {
+  return recordGateway({
+    context: context.usage,
+    feature: "tutor",
+    model:
+      typeof context.model === "string" ? context.model : context.model.modelId,
+    run: async (recorder) => {
+      const result = streamText({
+        model: context.model,
+        reasoning: "none",
+        maxOutputTokens: TUTOR_OUTPUT_TOKENS,
+        maxRetries: 0,
+        abortSignal: context.signal,
+        onChunk: ({ chunk }) => {
+          if (chunk.type === "text-delta") recorder.markFirstToken();
+        },
+        onStepEnd: recorder.recordMetrics,
+        output: Output.object({ schema: tutorReplySchema }),
+        system: `${system}\n${OBJECT_OUTPUT_INSTRUCTION}`,
+        prompt,
+      });
+      for await (const partial of result.partialOutputStream) {
+        if (
+          typeof partial.feedback === "string" &&
+          !hasQuestion(partial.feedback)
+        )
+          onFeedback(partial.feedback);
+      }
+      if ((await result.finishReason) !== "stop")
+        throw new Error("Incomplete tutor response");
+      let reply;
+      try {
+        reply = await result.output;
+      } catch (error) {
+        const recovered = recoverWrappedObject(error, tutorReplySchema);
+        if (!recovered) throw error;
+        reply = recovered.data;
+      }
+      return tutorReplySchema.parse(reply);
+    },
+  });
+}
+
 export async function generateLessonPlan(
   context: GenerationContext,
   sourceContext: string,
@@ -105,11 +154,12 @@ export async function generateLessonPlan(
 export async function generateTutorReply(
   context: GenerationContext,
   prompt: string,
+  onFeedback: (text: string) => void = () => {},
 ) {
   for (let attempt = 0; attempt < 2; attempt++) {
-    const reply = await generateObject(
+    if (attempt) onFeedback("");
+    const reply = await streamReplyObject(
       context,
-      tutorReplySchema,
       TUTOR_SYSTEM_PROMPT +
         `
 Classify the latest learner message using the displayed part and recent conversation, in any language:
@@ -117,16 +167,20 @@ Classify the latest learner message using the displayed part and recent conversa
 - help: asks for explanation, a hint, an example, or says they do not understand/don't know.
 - mixed: both attempts an answer and requests explanation or help. Address both.
 - uncertain: intent is ambiguous, off-topic, or unrelated to the active question. Do not assume it is an answer.
-Do not classify using punctuation alone. For help, mixed, and uncertain, assist with the current idea without asking the learner anything or telling them to retry. For answer, give 1–3 sentences of feedback; correct mistakes with a brief explanation. If the part is already answered, provide review/help without grading again. No scores.
+Do not classify using punctuation alone. Distinguish a NEW answer attempt from a request to explain previous feedback, including after an incorrect answer. For help, mixed, and uncertain, assist with the current idea without asking the learner anything; set correctness to not_applicable. A mixed message stays on the current question so its request for help can be addressed first. The application repeats the exact saved question after this feedback, so do not quote or paraphrase it.
+For answer, give 1–3 sentences of feedback using the active question, its explanation, and the sources. Accept equivalent wording; set correctness to correct or incorrect only to describe the feedback. If incorrect, briefly explain the correct answer without requesting another attempt. The application advances after EVERY answer attempt regardless of correctness and appends the next prepared part itself. If the part is already answered or the lesson is finished, provide review/help without grading again and set correctness to not_applicable. No scores.
 The feedback field contains ONLY declarative feedback or explanation. No questions, quoted questions, rhetorical questions, next-part content, or instructions to advance. Never output a lesson question in feedback. Match the learner's language.
 ` +
         (attempt
           ? "\nYour previous output contained a question. Rewrite using only declarative statements."
           : ""),
       prompt,
-      TUTOR_OUTPUT_TOKENS,
+      onFeedback,
     );
-    if (!hasQuestion(reply.feedback)) return reply;
+    if (!hasQuestion(reply.feedback)) {
+      onFeedback(reply.feedback);
+      return reply;
+    }
   }
   throw new Error("Tutor feedback contained a question");
 }

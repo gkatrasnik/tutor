@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Nunito_Sans } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { InstallPrompt } from "@/components/install-prompt";
 import { Toaster } from "@/components/ui/sonner";
 
 import "./globals.css";
@@ -33,6 +34,7 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col">
         <ThemeProvider>
           {children}
+          <InstallPrompt />
           <Toaster position="top-right" richColors />
         </ThemeProvider>
       </body>
